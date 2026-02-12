@@ -15,7 +15,7 @@ def turkiye_saati_al():
     tz = pytz.timezone('Europe/Istanbul')
     return datetime.now(tz).strftime('%H:%M:%S')
 
-# --- GELİŞMİŞ CSS ---
+# --- GELİŞMİŞ CSS (HİZALAMA VE TABLET UYUMU) ---
 st.markdown("""
 <style>
     .stApp { background-color: #000000; }
@@ -57,7 +57,6 @@ with h_c3: st.markdown('<div class="header-container"><div class="header-text">S
 
 if canlı_ons:
     # 20:30 Referans Hesabı
-    # Ons 4970 iken liste fiyatlarınız referans alınır.
     r_ons = 4970.0
     deg = canlı_ons / r_ons
 
@@ -77,8 +76,9 @@ if canlı_ons:
     satir("TAM (ATA)", 47500.00, 50000.00)
     satir("YARIM", 23100.00, 24400.00)
     satir("ÇEYREK", 11550.00, 12200.00)
-    satir("GRAM (HAS)", 7100.00, 7500.00
-# Alt Bilgi (Hata burada düzeltildi, hiçbir boşluk kalmadı)
+    satir("GRAM (HAS)", 7100.00, 7500.00)
+
+    # Alt Bilgi
     st.markdown(f"<div style='text-align: center; color: #555; font-size: 18px; margin-top: 25px;'>ONS: {canlı_ons:,.2f} $ | Güncelleme: {turkiye_saati_al()} (TSİ)</div>", unsafe_allow_html=True)
 else:
     st.error("Piyasa verisi çekilemedi.")
