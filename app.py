@@ -15,18 +15,31 @@ def turkiye_saati_al():
     tz = pytz.timezone('Europe/Istanbul')
     return datetime.now(tz).strftime('%H:%M:%S')
 
-# --- GELİŞMİŞ CSS (HİZALAMA VE TABLET UYUMU) ---
+# --- GELİŞMİŞ CSS (ÜST VE ALT ÇUBUKLARI GİZLER) ---
 st.markdown("""
 <style>
+    /* Üstteki GitHub, Menu ve Footer'ı tamamen gizle */
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
+    .stDeployButton {display:none;}
+    
     .stApp { background-color: #000000; }
+    
+    /* Yan Panel */
     [data-testid="stSidebar"] { background-color: #111111; border-right: 1px solid #333; }
+    
+    /* Başlık ve Hizalama */
     .header-container { display: flex; justify-content: flex-end; align-items: center; background-color: #222; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
     .header-text { color: #ffffff; font-size: clamp(16px, 3vw, 28px); font-weight: bold; text-align: center; width: 100%; }
+    
     .row-wrapper { display: flex; align-items: baseline; padding: 10px 0; border-bottom: 1px solid #333; }
     .product-name { flex: 1.2; font-size: clamp(16px, 3.2vw, 36px); font-weight: bold; color: #ffffff; white-space: nowrap; }
+    
     .price-container { flex: 1; display: flex; justify-content: flex-end; align-items: baseline; }
     .price-buy { font-size: clamp(22px, 4.5vw, 55px); font-weight: bold; color: #2ecc71; font-family: 'Courier New', monospace; text-align: right; line-height: 1; }
     .price-sell { font-size: clamp(26px, 5.5vw, 70px); font-weight: 900; color: #00ff00; font-family: 'Courier New', monospace; text-align: right; text-shadow: 0 0 10px rgba(0, 255, 0, 0.5); line-height: 1; margin-left: 10px; }
+    
     .hidden { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
@@ -56,7 +69,6 @@ with h_c2: st.markdown('<div class="header-container"><div class="header-text">A
 with h_c3: st.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
 
 if canlı_ons:
-    # 20:30 Referans Hesabı
     r_ons = 4970.0
     deg = canlı_ons / r_ons
 
@@ -77,8 +89,7 @@ if canlı_ons:
     satir("YARIM", 23100.00, 24400.00)
     satir("ÇEYREK", 11550.00, 12200.00)
     satir("GRAM (HAS)", 7100.00, 7500.00)
-
-    # Alt Bilgi
+# Alt Bilgi
     st.markdown(f"<div style='text-align: center; color: #555; font-size: 18px; margin-top: 25px;'>ONS: {canlı_ons:,.2f} $ | Güncelleme: {turkiye_saati_al()} (TSİ)</div>", unsafe_allow_html=True)
 else:
     st.error("Piyasa verisi çekilemedi.")
