@@ -124,8 +124,7 @@ if canlı_ons:
         
         # HTML yapısını tek bir blokta basıyoruz ki CSS tam hükmedebilsin
 alis_html = f'<span class="price-buy">{g_alis:,.2f}</span>' if g_alis > 0 else '<span class="price-buy hidden">----</span>'
-        satis_html = f'<span class="price-sell">{g_satis:,.2f}</span>' if g_satis > 0 else '<span class="price-sell hidden">----</span>'
-        
+               
         st.markdown(f"""
             <div class="row-wrapper">
                 <div class="product-name">{isim}</div>
