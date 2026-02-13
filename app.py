@@ -4,35 +4,37 @@ from datetime import datetime
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
-# --- 1. SAYFA YAPILANDIRMASI ---
-st.set_page_config(page_title="İryum Canlı Pano", layout="wide")
+# --- 1. SAYFA YAPILANDIRMASI VE PANELİ AÇIK TUTMA ---
+st.set_page_config(page_title="İryum Canlı Pano", layout="wide", initial_sidebar_state="expanded")
 st_autorefresh(interval=120000, key="fiyat_sayaci")
 
 def turkiye_saati_al():
     tz = pytz.timezone('Europe/Istanbul')
     return datetime.now(tz).strftime('%H:%M:%S')
 
-# --- 2. REKLAM TEMİZLEME (NÜKLEER SEÇENEK) ---
+# --- 2. REKLAM TEMİZLEME VE PANEL BUTONUNU KORUMA ---
 st.markdown("""
 <style>
-    /* Menüler ve Standart Reklamlar */
-    #MainMenu {visibility: hidden !important;}
-    header {visibility: hidden !important;}
-    footer {visibility: hidden !important; display: none !important;}
+    /* 1. Üst menüyü gizle ama PANEL OKUNU (header) KESİNLİKLE SAKLAMA! */
+    #MainMenu {visibility: hidden !important; display: none !important;}
     .stDeployButton {display:none !important;}
-    [data-testid="stDecoration"] {display:none !important;}
     [data-testid="stToolbar"] {display:none !important;}
-    
-    /* Mobilde Çıkan Kırmızı/Gri Hosted Banner Kesin Silme */
-    div[class*="viewerBadge"] { display: none !important; opacity: 0 !important; visibility: hidden !important; }
-    iframe[src*="badge"] { display: none !important; }
 
-    /* Arka Plan ve Panel */
+    /* 2. Alttaki yazıları gizle */
+    footer {visibility: hidden !important; display: none !important;}
+    
+    /* 3. Mobildeki Kırmızı "Hosted with Streamlit" Şeridini Kökten Gizle */
+    div[class^="viewerBadge_container"] { display: none !important; opacity: 0 !important; visibility: hidden !important; z-index: -9999 !important; }
+    div[class*="viewerBadge_container"] { display: none !important; opacity: 0 !important; visibility: hidden !important; z-index: -9999 !important; }
+    a[href*="streamlit.io/cloud"] { display: none !important; }
+    .viewerBadge_container__1QSob { display: none !important; }
+
+    /* Arka Plan ve Panel Renkleri */
     .stApp { background-color: #000000; }
     [data-testid="stSidebar"] { background-color: #111111; border-right: 1px solid #333; }
     .stSidebar [data-testid="stMarkdownContainer"] p { color: #00ff00; font-weight: bold; }
 
-    /* Tablo Düzeni */
+    /* Tablo Tasarımı */
     .header-container { display: flex; justify-content: flex-end; align-items: center; background-color: #222; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
     .header-text { color: #ffffff; font-size: clamp(14px, 3vw, 28px); font-weight: bold; text-align: center; width: 100%; }
     .row-wrapper { display: flex; align-items: baseline; padding: 10px 0; border-bottom: 1px solid #333; }
@@ -50,7 +52,7 @@ st.sidebar.markdown("---")
 s_adj = st.sidebar.slider("Satışları Artır/Azalt (TL)", -500.0, 500.0, 0.0, step=1.0)
 a_adj = st.sidebar.slider("Alışları Artır/Azalt (TL)", -500.0, 500.0, 0.0, step=1.0)
 
-# --- 4. VERİ ÇEKME VE MATEMATİK FONKSİYONU ---
+# --- 4. VERİ ÇEKME ---
 def canli_ons_al():
     try:
         gold = yf.Ticker("GC=F")
@@ -61,7 +63,6 @@ def canli_ons_al():
 
 canli_ons = canli_ons_al()
 
-# Bu yapıyı hataları önlemek için dışarı aldım (Boşluk hatası vermez)
 def satir_yaz(isim, ref_a, ref_s, degisim, alis_ek, satis_ek):
     g_a = (ref_a * degisim) + alis_ek if ref_a > 0 else 0
     g_s = (ref_s * degisim) + satis_ek if ref_s > 0 else 0
@@ -70,7 +71,6 @@ def satir_yaz(isim, ref_a, ref_s, degisim, alis_ek, satis_ek):
     html_satir = f'<div class="row-wrapper"><div class="product-name">{isim}</div><div class="price-container">{a_h}</div><div class="price-container">{s_h}</div></div>'
     st.markdown(html_satir, unsafe_allow_html=True)
 
-# --- 5. EKRANA YAZDIRMA ---
 st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(25px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
 col_h1, col_h2, col_h3 = st.columns([1.2, 1, 1])
 with col_h2: 
@@ -82,7 +82,6 @@ if canli_ons:
     r_ons = 4970.0
     deg = canli_ons / r_ons
     
-    # Hata veren girintiler ortadan kaldırıldı
     satir_yaz("24 AYAR (HAS)", 0, 7350.00, deg, a_adj, s_adj)
     satir_yaz("22 AYAR SATIŞ", 0, 7300.00, deg, a_adj, s_adj)
     satir_yaz("14 AYAR", 0, 6900.00, deg, a_adj, s_adj)
