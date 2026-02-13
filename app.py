@@ -4,7 +4,7 @@ from datetime import datetime
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
-# --- 1. SAYFA YAPILANDIRMASI ---
+# --- 1. SAYFA VE PANEL YAPILANDIRMASI ---
 st.set_page_config(page_title="İryum Canlı Pano", layout="wide")
 
 # 2 Dakikada bir otomatik yenileme
@@ -18,19 +18,17 @@ def turkiye_saati_al():
 # --- 3. AGRESİF REKLAM TEMİZLEME VE GÖRSEL TASARIM ---
 st.markdown("""
 <style>
-    /* 1. TÜM REKLAMLARI VE STREAMLIT İZLERİNİ KESİN SİL (MOBİL DAHİL) */
-    header {visibility: hidden !important;}
+    /* Reklamları ve Streamlit yazılarını mobilde dahi kökten sil */
     footer {visibility: hidden !important; display: none !important;}
+    .stDeployButton {display:none !important;}
     [data-testid="stDecoration"] {display:none !important;}
     [data-testid="stStatusWidget"] {display:none !important;}
-    .stAppDeployButton {display:none !important;}
-    .stDeployButton {display:none !important;}
     
-    /* Mobildeki o inatçı kırmızı/gri Streamlit bandını hedefle */
+    /* Mobildeki "Hosted with Streamlit" rozetini hedefle ve yok et */
     div[class^="viewerBadge_container"], 
     div[class*="viewerBadge_container"],
-    div[id^="streamlit_share_button"],
-    a[href*="streamlit.io"] {
+    a[href*="streamlit.io"],
+    #streamlit_share_button {
         display: none !important;
         visibility: hidden !important;
         height: 0 !important;
@@ -43,38 +41,53 @@ st.markdown("""
     }
     #MainMenu {visibility: hidden !important;}
 
-    /* 2. GENEL ARKA PLAN VE YAN PANEL */
+    /* Genel Tasarım */
     .stApp { background-color: #000000; }
     [data-testid="stSidebar"] { 
         background-color: #111111; 
         border-right: 1px solid #333; 
     }
-
-    /* 3. TABLO TASARIMI VE HİZALAMA */
+    
     .header-container { 
         display: flex; justify-content: flex-end; align-items: center; 
         background-color: #222; padding: 10px; border-radius: 5px; margin-bottom: 10px; 
     }
-    .header-text { color: #ffffff; font-size: clamp(14px, 3vw, 28px); font-weight: bold; text-align: center; width: 100%; }
+    .header-text { 
+        color: #ffffff; font-size: clamp(14px, 3vw, 28px); font-weight: bold; 
+        text-align: center; width: 100%; 
+    }
     
-    .row-wrapper { display: flex; align-items: baseline; padding: 10px 0; border-bottom: 1px solid #333; }
-    .product-name { flex: 1.2; font-size: clamp(14px, 3.2vw, 36px); font-weight: bold; color: #ffffff; white-space: nowrap; }
-    
-    .price-container { flex: 1; display: flex; justify-content: flex-end; align-items: baseline; }
-    .price-buy { font-size: clamp(18px, 4.5vw, 55px); font-weight: bold; color: #2ecc71; font-family: 'Courier New', monospace; text-align: right; }
-    .price-sell { font-size: clamp(20px, 5.5vw, 70px); font-weight: 900; color: #00ff00; font-family: 'Courier New', monospace; text-shadow: 0 0 10px rgba(0, 255, 0, 0.5); margin-left: 10px; }
-    
+    .row-wrapper { 
+        display: flex; align-items: baseline; padding: 10px 0; border-bottom: 1px solid #333; 
+    }
+    .product-name { 
+        flex: 1.2; font-size: clamp(14px, 3.2vw, 36px); font-weight: bold; color: #ffffff; white-space: nowrap; 
+    }
+    .price-container { 
+        flex: 1; display: flex; justify-content: flex-end; align-items: baseline; 
+    }
+    .price-buy { 
+        font-size: clamp(18px, 4.5vw, 55px); font-weight: bold; color: #2ecc71; 
+        font-family: 'Courier New', monospace; text-align: right; line-height: 1; 
+    }
+    .price-sell { 
+        font-size: clamp(20px, 5.5vw, 70px); font-weight: 900; color: #00ff00; 
+        font-family: 'Courier New', monospace; text-align: right; 
+        text-shadow: 0 0 10px rgba(0, 255, 0, 0.5); line-height: 1; margin-left: 10px; 
+    }
     .hidden { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. YÖNETİCİ PANELİ (SOLDAKİ OK İŞARETİ) ---
+# --- 4. YÖNETİCİ PANELİ ---
 st.sidebar.header("💎 İRYUM YÖNETİCİ")
 st.sidebar.markdown("---")
 s_adj = st.sidebar.slider("Satışları Artır/Azalt (TL)", -500.0, 500.0, 0.0, step=1.0)
 a_adj = st.sidebar.slider("Alışları Artır/Azalt (TL)", -500.0, 500.0, 0.0, step=1.0)
+st.sidebar.markdown("---")
+st.sidebar.write("Panelden yaptığınız ayarlar anlık olarak tabelaya yansır.")
 
-# --- 5. VERİ ÇEKME MOTORU ---
+# --- 5. VERİ ÇEKME ---
 def canlı_ons_al():
     try:
         gold = yf.Ticker("GC=F")
