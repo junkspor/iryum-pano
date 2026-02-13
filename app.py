@@ -7,31 +7,48 @@ from streamlit_autorefresh import st_autorefresh
 # --- SAYFA AYARLARI ---
 st.set_page_config(page_title="İryum Canlı Pano", layout="wide")
 
-# 2 Dakikada bir yenileme
+# 2 Dakikada bir (120000 ms) sayfayı zorla yenileme
 st_autorefresh(interval=120000, key="fiyat_sayaci")
 
-# --- TÜRKİYE SAATİ ---
+# --- TÜRKİYE SAATİ AYARI ---
 def turkiye_saati_al():
     tz = pytz.timezone('Europe/Istanbul')
     return datetime.now(tz).strftime('%H:%M:%S')
 
-# --- GELİŞMİŞ CSS (ÜST/ALT REKLAMLARI GİZLER VE HİZALAR) ---
+# --- GELİŞMİŞ CSS (REKLAM TEMİZLİĞİ VE TABELA DÜZENİ) ---
 st.markdown("""
 <style>
-    /* Üst ve alt tüm Streamlit reklamlarını/butonlarını gizle */
-    header {visibility: hidden;}
-    footer {visibility: hidden;}
-    #MainMenu {visibility: hidden;}
-    .stDeployButton {display:none;}
-    [data-testid="stHeader"] {display: none;}
-    [data-testid="stDecoration"] {display:none;}
-    [data-testid="stStatusWidget"] {display:none;}
-    div.viewerBadge_container__1QSob {display:none !important;}
-
-    /* Arka plan ve genel stil */
-    .stApp { background-color: #000000; }
-    [data-testid="stSidebar"] { background-color: #111111; border-right: 1px solid #333; }
+    /* 1. TÜM REKLAMLARI VE STREAMLIT İZLERİNİ SİL (MOBİL DAHİL) */
+    header {visibility: hidden !important;}
+    footer {visibility: hidden !important; display: none !important;}
+    .stDeployButton {display:none !important;}
+    [data-testid="stDecoration"] {display:none !important;}
+    [data-testid="stStatusWidget"] {display:none !important;}
     
+    /* Sağ üstteki Fork/GitHub menüsünü gizle */
+    #MainMenu {visibility: hidden !important;}
+    
+    /* Mobildeki "Hosted with Streamlit" rozetini kesin sil */
+    div[class^="viewerBadge_container"], 
+    div[class*="viewerBadge_container"],
+    a[href*="streamlit.io"] {
+        display: none !important;
+        visibility: hidden !important;
+    }
+
+    /* 2. ARKA PLAN VE YAN PANEL STİLİ */
+    .stApp { background-color: #000000; }
+    
+    [data-testid="stSidebar"] { 
+        background-color: #111111; 
+        border-right: 1px solid #333; 
+    }
+    .stSidebar [data-testid="stMarkdownContainer"] p { 
+        color: #00ff00; 
+        font-weight: bold; 
+    }
+
+    /* 3. TABLO HİZALAMA VE FİYAT TASARIMI */
     .header-container { 
         display: flex; justify-content: flex-end; align-items: center; 
         background-color: #222; padding: 10px; border-radius: 5px; margin-bottom: 10px; 
@@ -65,12 +82,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- YAN PANEL ---
+# --- YÖNETİCİ PANELİ (SIDEBAR) ---
 st.sidebar.header("💎 İryum Yönetici")
-s_adj = st.sidebar.slider("Satışları Artır/Azalt (TL)", -500.0, 500.0, 0.0, step=1.0)
-a_adj = st.sidebar.slider("Alışları Artır/Azalt (TL)", -500.0, 500.0, 0.0, step=1.0)
+st.sidebar.markdown("---")
+s_adj = st.sidebar.slider("Satış Fiyatları (+/- TL)", -500.0, 500.0, 0.0, step=1.0)
+a_adj = st.sidebar.slider("Alış Fiyatları (+/- TL)", -500.0, 500.0, 0.0, step=1.0)
+st.sidebar.markdown("---")
+st.sidebar.info("Bu panelden dükkan makasını anlık manuel güncelleyebilirsiniz.")
 
-# --- VERİ ÇEKME ---
+# --- VERİ ÇEKME MOTORU ---
 def canlı_ons_al():
     try:
         gold = yf.Ticker("GC=F")
@@ -90,6 +110,7 @@ with h_c2: st.markdown('<div class="header-container"><div class="header-text">A
 with h_c3: st.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
 
 if canlı_ons:
+    # 20:30 Referans Hesabı (Ons: 4970)
     r_ons = 4970.0
     deg = canlı_ons / r_ons
 
@@ -99,7 +120,8 @@ if canlı_ons:
         a_h = f'<span class="price-buy">{g_a:,.2f}</span>' if g_a > 0 else '<span class="price-buy hidden">----</span>'
         s_h = f'<span class="price-sell">{g_s:,.2f}</span>' if g_s > 0 else '<span class="price-sell hidden">----</span>'
         st.markdown(f'<div class="row-wrapper"><div class="product-name">{isim}</div><div class="price-container">{a_h}</div><div class="price-container">{s_h}</div></div>', unsafe_allow_html=True)
-# --- LİSTE ---
+
+    # --- SİZİN ÖZEL LİSTENİZ ---
     satir("24 AYAR (HAS)", 0, 7350.00)
     satir("22 AYAR SATIŞ", 0, 7300.00)
     satir("14 AYAR", 0, 6900.00)
@@ -110,7 +132,7 @@ if canlı_ons:
     satir("ÇEYREK", 11550.00, 12200.00)
     satir("GRAM (HAS)", 7100.00, 7500.00)
 
-    # Alt Bilgi
+    # Alt Bilgi (Hizalama Hatası Giderildi)
     st.markdown(f"<div style='text-align: center; color: #555; font-size: 18px; margin-top: 25px;'>ONS: {canlı_ons:,.2f} $ | Güncelleme: {turkiye_saati_al()} (TSİ)</div>", unsafe_allow_html=True)
 else:
-    st.error("Piyasa verisi çekilemedi.")
+    st.error("Piyasa verisi çekilemedi. İnternet bağlantısını kontrol edin.")
