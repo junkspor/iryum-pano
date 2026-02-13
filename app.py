@@ -4,75 +4,91 @@ from datetime import datetime
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
-# --- SAYFA AYARLARI ---
+# --- 1. SAYFA VE PANEL AYARLARI ---
 st.set_page_config(page_title="İryum Canlı Pano", layout="wide")
 
 # 2 Dakikada bir yenileme
 st_autorefresh(interval=120000, key="fiyat_sayaci")
 
-# --- TÜRKİYE SAATİ ---
+# --- 2. TÜRKİYE SAATİ FONKSİYONU ---
 def turkiye_saati_al():
     tz = pytz.timezone('Europe/Istanbul')
     return datetime.now(tz).strftime('%H:%M:%S')
 
-# --- AGRESİF REKLAM TEMİZLEME VE PANEL KORUMA ---
+# --- 3. AGRESİF REKLAM TEMİZLİĞİ VE GÖRSEL DÜZEN ---
 st.markdown("""
 <style>
-    /* 1. TÜM REKLAMLARI VE ALTTAKİ YAZILARI KESİN SİL */
+    /* Reklamları ve Streamlit izlerini kökten sil */
     footer {visibility: hidden !important; display: none !important;}
+    .stDeployButton {display:none !important;}
     [data-testid="stDecoration"] {display:none !important;}
     [data-testid="stStatusWidget"] {display:none !important;}
-    .stDeployButton {display:none !important;}
     
-    /* Mobildeki o inatçı "Hosted with Streamlit" rozetini ve gri alanı yok et */
+    /* Mobildeki "Hosted with Streamlit" rozetini hedefle ve yok et */
     div[class^="viewerBadge_container"], 
     div[class*="viewerBadge_container"],
     a[href*="streamlit.io"],
     #streamlit_share_button {
         display: none !important;
         visibility: hidden !important;
-        height: 0 !important;
-        width: 0 !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
 
-    /* 2. ÜST ŞERİDİ GİZLE AMA PANEL BUTONUNU (OK İŞARETİ) KORU */
-    /* Sağdaki GitHub/Fork menüsünü gizler */
+    /* Üst şeridi şeffaf yap ama panel butonunu (ok) saklama */
+    [data-testid="stHeader"] {
+        background: transparent !important;
+        color: white !important;
+    }
     #MainMenu {visibility: hidden !important;}
-    /* Üstteki boş siyah şeridi şeffaf yapar */
-    [data-testid="stHeader"] {background-color: rgba(0,0,0,0) !important; color: white !important;}
 
-    /* 3. ARKA PLAN VE YAN PANEL */
+    /* Genel Tasarım */
     .stApp { background-color: #000000; }
     [data-testid="stSidebar"] { 
         background-color: #111111; 
         border-right: 1px solid #333; 
     }
-    .stSidebar [data-testid="stMarkdownContainer"] p { color: #00ff00; font-weight: bold; }
-
-    /* 4. TABLO HİZALAMA */
+    
     .header-container { 
         display: flex; justify-content: flex-end; align-items: center; 
         background-color: #222; padding: 10px; border-radius: 5px; margin-bottom: 10px; 
     }
-    .header-text { color: #ffffff; font-size: clamp(16px, 3vw, 28px); font-weight: bold; text-align: center; width: 100%; }
-    .row-wrapper { display: flex; align-items: baseline; padding: 10px 0; border-bottom: 1px solid #333; }
-    .product-name { flex: 1.2; font-size: clamp(16px, 3.2vw, 36px); font-weight: bold; color: #ffffff; white-space: nowrap; }
-    .price-container { flex: 1; display: flex; justify-content: flex-end; align-items: baseline; }
-    .price-buy { font-size: clamp(22px, 4.5vw, 55px); font-weight: bold; color: #2ecc71; font-family: 'Courier New', monospace; text-align: right; line-height: 1; }
-    .price-sell { font-size: clamp(26px, 5.5vw, 70px); font-weight: 900; color: #00ff00; font-family: 'Courier New', monospace; text-align: right; text-shadow: 0 0 10px rgba(0, 255, 0, 0.5); line-height: 1; margin-left: 10px; }
+    .header-text { 
+        color: #ffffff; font-size: clamp(16px, 3vw, 28px); font-weight: bold; 
+        text-align: center; width: 100%; 
+    }
+    
+    .row-wrapper { 
+        display: flex; align-items: baseline; padding: 10px 0; border-bottom: 1px solid #333; 
+    }
+    .product-name { 
+        flex: 1.2; font-size: clamp(14px, 3.2vw, 36px); font-weight: bold; color: #ffffff; white-space: nowrap; 
+    }
+    .price-container { 
+        flex: 1; display: flex; justify-content: flex-end; align-items: baseline; 
+    }
+    .price-buy { 
+        font-size: clamp(18px, 4.5vw, 55px); font-weight: bold; color: #2ecc71; 
+        font-family: 'Courier New', monospace; text-align: right; line-height: 1; 
+    }
+    .price-sell { 
+        font-size: clamp(20px, 5.5vw, 70px); font-weight: 900; color: #00ff00; 
+        font-family: 'Courier New', monospace; text-align: right; 
+        text-shadow: 0 0 10px rgba(0, 255, 0, 0.5); line-height: 1; margin-left: 10px; 
+    }
     .hidden { visibility: hidden; }
 </style>
 """, unsafe_allow_html=True)
 
-# --- YÖNETİCİ PANELİ ---
-st.sidebar.header("💎 İryum Yönetici")
+# --- 4. YÖNETİCİ PANELİ ---
+st.sidebar.header("💎 İRYUM YÖNETİCİ")
 st.sidebar.markdown("---")
-s_adj = st.sidebar.slider("Satış Fiyatları (+/- TL)", -500.0, 500.0, 0.0, step=1.0)
-a_adj = st.sidebar.slider("Alış Fiyatları (+/- TL)", -500.0, 500.0, 0.0, step=1.0)
+s_adj = st.sidebar.slider("Satışları Artır/Azalt (TL)", -500.0, 500.0, 0.0, step=1.0)
+a_adj = st.sidebar.slider("Alışları Artır/Azalt (TL)", -500.0, 500.0, 0.0, step=1.0)
 st.sidebar.markdown("---")
 st.sidebar.write("Panelden yaptığınız ayarlar anlık olarak tabelaya yansır.")
 
-# --- VERİ ÇEKME ---
+# --- 5. VERİ ÇEKME ---
 def canlı_ons_al():
     try:
         gold = yf.Ticker("GC=F")
@@ -83,13 +99,12 @@ def canlı_ons_al():
 
 canlı_ons = canlı_ons_al()
 
-# --- BAŞLIK ---
-st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(30px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
+# --- 6. BAŞLIK VE TABLO ---
+st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(25px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
 
-# --- TABLO BAŞLIKLARI ---
-h_c1, h_c2, h_c3 = st.columns([1.2, 1, 1])
-with h_c2: st.markdown('<div class="header-container"><div class="header-text">ALIŞ</div></div>', unsafe_allow_html=True)
-with h_c3: st.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
+col_h1, col_h2, col_h3 = st.columns([1.2, 1, 1])
+with col_h2: st.markdown('<div class="header-container"><div class="header-text">ALIŞ</div></div>', unsafe_allow_html=True)
+with col_h3: st.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
 
 if canlı_ons:
     r_ons = 4970.0
@@ -101,6 +116,7 @@ def satir(isim, ref_a, ref_s):
         s_h = f'<span class="price-sell">{g_s:,.2f}</span>' if g_s > 0 else '<span class="price-sell hidden">----</span>'
         st.markdown(f'<div class="row-wrapper"><div class="product-name">{isim}</div><div class="price-container">{a_h}</div><div class="price-container">{s_h}</div></div>', unsafe_allow_html=True)
 
+    # --- LİSTE ---
     satir("24 AYAR (HAS)", 0, 7350.00)
     satir("22 AYAR SATIŞ", 0, 7300.00)
     satir("14 AYAR", 0, 6900.00)
@@ -111,6 +127,6 @@ def satir(isim, ref_a, ref_s):
     satir("ÇEYREK", 11550.00, 12200.00)
     satir("GRAM (HAS)", 7100.00, 7500.00)
 
-    st.markdown(f"<div style='text-align: center; color: #555; font-size: 18px; margin-top: 25px;'>ONS: {canlı_ons:,.2f} $ | Güncelleme: {turkiye_saati_al()} (TSİ)</div>", unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align: center; color: #555; font-size: 16px; margin-top: 25px;'>ONS: {canlı_ons:,.2f} $ | Güncelleme: {turkiye_saati_al()} (TSİ)</div>", unsafe_allow_html=True)
 else:
     st.error("Piyasa verisi çekilemedi.")
