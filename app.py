@@ -15,82 +15,50 @@ def turkiye_saati_al():
     tz = pytz.timezone('Europe/Istanbul')
     return datetime.now(tz).strftime('%H:%M:%S')
 
-# --- GELİŞMİŞ CSS (TAM TABELA MODU - TÜM REKLAMLARI GİZLER) ---
+# --- GELİŞMİŞ CSS (ÜST/ALT REKLAMLARI GİZLER VE HİZALAR) ---
 st.markdown("""
 <style>
-    /* Üst menü, GitHub ikonu ve şeridi gizle */
+    /* Üst ve alt tüm Streamlit reklamlarını/butonlarını gizle */
     header {visibility: hidden;}
-    [data-testid="stHeader"] {display: none;}
-    
-    /* Alttaki Streamlit reklamlarını ve kırmızı şeridi gizle */
     footer {visibility: hidden;}
+    #MainMenu {visibility: hidden;}
     .stDeployButton {display:none;}
+    [data-testid="stHeader"] {display: none;}
     [data-testid="stDecoration"] {display:none;}
     [data-testid="stStatusWidget"] {display:none;}
     div.viewerBadge_container__1QSob {display:none !important;}
-    
-    /* Sayfa arka planı */
-    .stApp { background-color: #000000; }
-    
-    /* Yan Panel Ayarları */
-    [data-testid="stSidebar"] { background-color: #111111; border-right: 1px solid #333; }
-    .stSidebar [data-testid="stMarkdownContainer"] p { color: #00ff00; }
 
-    /* Başlık ve Hizalama Ayarları */
+    /* Arka plan ve genel stil */
+    .stApp { background-color: #000000; }
+    [data-testid="stSidebar"] { background-color: #111111; border-right: 1px solid #333; }
+    
     .header-container { 
-        display: flex; 
-        justify-content: flex-end; 
-        align-items: center; 
-        background-color: #222; 
-        padding: 10px; 
-        border-radius: 5px; 
-        margin-bottom: 10px; 
+        display: flex; justify-content: flex-end; align-items: center; 
+        background-color: #222; padding: 10px; border-radius: 5px; margin-bottom: 10px; 
     }
     .header-text { 
-        color: #ffffff; 
-        font-size: clamp(16px, 3vw, 28px); 
-        font-weight: bold; 
-        text-align: center; 
-        width: 100%; 
+        color: #ffffff; font-size: clamp(16px, 3vw, 28px); font-weight: bold; 
+        text-align: center; width: 100%; 
     }
     
     .row-wrapper { 
-        display: flex; 
-        align-items: baseline; 
-        padding: 10px 0; 
-        border-bottom: 1px solid #333; 
+        display: flex; align-items: baseline; padding: 10px 0; border-bottom: 1px solid #333; 
     }
     .product-name { 
-        flex: 1.2; 
-        font-size: clamp(16px, 3.2vw, 36px); 
-        font-weight: bold; 
-        color: #ffffff; 
-        white-space: nowrap; 
+        flex: 1.2; font-size: clamp(16px, 3.2vw, 36px); font-weight: bold; color: #ffffff; white-space: nowrap; 
     }
     
     .price-container { 
-        flex: 1; 
-        display: flex; 
-        justify-content: flex-end; 
-        align-items: baseline; 
+        flex: 1; display: flex; justify-content: flex-end; align-items: baseline; 
     }
     .price-buy { 
-        font-size: clamp(22px, 4.5vw, 55px); 
-        font-weight: bold; 
-        color: #2ecc71; 
-        font-family: 'Courier New', monospace; 
-        text-align: right; 
-        line-height: 1; 
+        font-size: clamp(22px, 4.5vw, 55px); font-weight: bold; color: #2ecc71; 
+        font-family: 'Courier New', monospace; text-align: right; line-height: 1; 
     }
     .price-sell { 
-        font-size: clamp(26px, 5.5vw, 70px); 
-        font-weight: 900; 
-        color: #00ff00; 
-        font-family: 'Courier New', monospace; 
-        text-align: right; 
-        text-shadow: 0 0 10px rgba(0, 255, 0, 0.5); 
-        line-height: 1; 
-        margin-left: 10px; 
+        font-size: clamp(26px, 5.5vw, 70px); font-weight: 900; color: #00ff00; 
+        font-family: 'Courier New', monospace; text-align: right; 
+        text-shadow: 0 0 10px rgba(0, 255, 0, 0.5); line-height: 1; margin-left: 10px; 
     }
     
     .hidden { visibility: hidden; }
@@ -122,17 +90,16 @@ with h_c2: st.markdown('<div class="header-container"><div class="header-text">A
 with h_c3: st.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
 
 if canlı_ons:
-    # 20:30 Referans
     r_ons = 4970.0
     deg = canlı_ons / r_ons
-def satir(isim, ref_a, ref_s):
+
+    def satir(isim, ref_a, ref_s):
         g_a = (ref_a * deg) + a_adj if ref_a > 0 else 0
         g_s = (ref_s * deg) + s_adj if ref_s > 0 else 0
         a_h = f'<span class="price-buy">{g_a:,.2f}</span>' if g_a > 0 else '<span class="price-buy hidden">----</span>'
         s_h = f'<span class="price-sell">{g_s:,.2f}</span>' if g_s > 0 else '<span class="price-sell hidden">----</span>'
         st.markdown(f'<div class="row-wrapper"><div class="product-name">{isim}</div><div class="price-container">{a_h}</div><div class="price-container">{s_h}</div></div>', unsafe_allow_html=True)
-
-    # --- LİSTE ---
+# --- LİSTE ---
     satir("24 AYAR (HAS)", 0, 7350.00)
     satir("22 AYAR SATIŞ", 0, 7300.00)
     satir("14 AYAR", 0, 6900.00)
