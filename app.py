@@ -5,21 +5,21 @@ import pytz
 from streamlit_autorefresh import st_autorefresh
 
 # --- 1. SAYFA AYARLARI ---
-st.set_page_config(page_title="İryum Canlı Pano", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="İryum Canlı Pano", layout="wide")
 st_autorefresh(interval=120000, key="fiyat_sayaci")
 
-# --- 2. REKLAM VE MENÜ GİZLEYİCİ (KUSURSUZ TABELA MODU) ---
+# --- 2. REKLAM GİZLEYİCİ CSS ---
 st.markdown("""
 <style>
     footer {visibility: hidden !important; display: none !important;}
     .stDeployButton {display:none !important;}
     [data-testid="stDecoration"] {display:none !important;}
-    div[class*="viewerBadge"] {display: none !important; opacity: 0 !important; visibility: hidden !important;}
+    div[class*="viewerBadge"] {display: none !important;}
     #MainMenu {visibility: hidden !important;}
     [data-testid="stToolbar"] {visibility: hidden !important;}
     [data-testid="stHeader"] {background-color: rgba(0,0,0,0) !important;}
     .stApp { background-color: #000000; }
-    [data-testid="stSidebar"] { background-color: #111111; border-right: 1px solid #333; }
+    
     .header-container { display: flex; justify-content: flex-end; align-items: center; background-color: #222; padding: 10px; border-radius: 5px; margin-bottom: 10px; }
     .header-text { color: #ffffff; font-size: clamp(14px, 3vw, 28px); font-weight: bold; text-align: center; width: 100%; }
     .row-wrapper { display: flex; align-items: baseline; padding: 10px 0; border-bottom: 1px solid #333; }
@@ -31,7 +31,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HAFIZA (SAYFA YENİLENDİĞİNDE FİYATLARIN SİLİNMEMESİ İÇİN) ---
+# --- 3. HAFIZA AYARLARI (GİRİLEN RAKAMLAR SİLİNMESİN DİYE) ---
 if 'ref_has' not in st.session_state:
     st.session_state.ref_has = 7350.0
 if 'fiyatlar' not in st.session_state:
@@ -46,32 +46,43 @@ if 'fiyatlar' not in st.session_state:
         "ÇEYREK":         [11550.0, 12200.0],
         "GRAM (HAS)":     [7100.0, 7500.0]
     }
-if 's_adj' not in st.session_state:
-    st.session_state.s_adj = 0.0
 if 'a_adj' not in st.session_state:
     st.session_state.a_adj = 0.0
+if 's_adj' not in st.session_state:
+    st.session_state.s_adj = 0.0
 
-# --- 4. YÖNETİCİ PANELİ (ŞİFRESİZ, HER AN DEĞİŞTİRİLEBİLİR) ---
-st.sidebar.header("📝 İRYUM FİYAT GİRİŞİ")
-st.sidebar.markdown("---")
+# --- 4. BAŞLIK ---
+st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(25px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
 
-# Patronun istediği an güncelleyebileceği Referans HAS kutusu
-st.session_state.ref_has = st.sidebar.number_input("REFERANS HAS FİYATI:", value=st.session_state.ref_has, step=10.0)
+# --- 5. FİYAT GİRİŞ PANELİ (AÇILIR KAPANIR KUTU) ---
+with st.expander("⚙️ FİYATLARI GİRMEK VE GÜNCELLEMEK İÇİN BURAYA TIKLAYIN ⚙️"):
+    st.markdown("### 1. Referans Has Fiyatını Girin")
+    st.session_state.ref_has = st.number_input("O ANKİ HAS FİYATI:", value=st.session_state.ref_has, step=10.0)
+    
+    st.markdown("### 2. İlk Fiyatları Girin")
+    col1, col2 = st.columns(2)
+    
+    items = list(st.session_state.fiyatlar.keys())
+    half = len(items) // 2 + 1
+    
+    for i, isim in enumerate(items):
+        target_col = col1 if i < half else col2
+        with target_col:
+            st.markdown(f"{isim}")
+            a = st.number_input(f"Alış", value=st.session_state.fiyatlar[isim][0], step=10.0, key=f"a_{isim}")
+            s = st.number_input(f"Satış", value=st.session_state.fiyatlar[isim][1], step=10.0, key=f"s_{isim}")
+            st.session_state.fiyatlar[isim] = [a, s]
+            st.markdown("---")
+            
+    st.markdown("### 3. Hızlı Makas Ayarı (Zorunlu Değil)")
+    st.session_state.a_adj = st.slider("Tüm Alışlara Ekle/Çıkar", -500.0, 500.0, st.session_state.a_adj, step=1.0)
+    st.session_state.s_adj = st.slider("Tüm Satışlara Ekle/Çıkar", -500.0, 500.0, st.session_state.s_adj, step=1.0)
+# --- 6. TABLO BAŞLIKLARI ---
+c1, c2, c3 = st.columns([1.2, 1, 1])
+with c2: st.markdown('<div class="header-container"><div class="header-text">ALIŞ</div></div>', unsafe_allow_html=True)
+with c3: st.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
 
-st.sidebar.markdown("### 🏷️ Ürünlerin İlk Fiyatları")
-st.sidebar.info("Buraya girdiğiniz rakamlar CANLI HAS değiştikçe otomatik esneyecektir.")
-
-# Tüm ürünler için alt alta açılır kapanır fiyat kutucukları
-for isim in st.session_state.fiyatlar:
-    with st.sidebar.expander(isim):
-        a = st.number_input(f"{isim} Alış", value=st.session_state.fiyatlar[isim][0], step=10.0, key=f"a_{isim}")
-        s = st.number_input(f"{isim} Satış", value=st.session_state.fiyatlar[isim][1], step=10.0, key=f"s_{isim}")
-        st.session_state.fiyatlar[isim] = [a, s]
-
-st.sidebar.markdown("### ⚙️ Hızlı Makas Ayarı (Tüm Liste)")
-st.session_state.a_adj = st.sidebar.slider("Tüm Alışlara Ekle/Çıkar", -500.0, 500.0, st.session_state.a_adj, step=1.0)
-st.session_state.s_adj = st.sidebar.slider("Tüm Satışlara Ekle/Çıkar", -500.0, 500.0, st.session_state.s_adj, step=1.0)
-# --- 5. VERİ ÇEKME FONKSİYONLARI ---
+# --- 7. VERİ ÇEKME VE HESAPLAMA ---
 def turkiye_saati_al():
     tz = pytz.timezone('Europe/Istanbul')
     return datetime.now(tz).strftime('%H:%M:%S')
@@ -88,18 +99,10 @@ def canli_dolar_al():
     except:
         return None
 
-# --- 6. ANA EKRAN ÇİZİMİ ---
-st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(25px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
-
-c1, c2, c3 = st.columns([1.2, 1, 1])
-with c2: st.markdown('<div class="header-container"><div class="header-text">ALIŞ</div></div>', unsafe_allow_html=True)
-with c3: st.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
-
 ons = canli_ons_al()
 dolar = canli_dolar_al()
 
 if ons and dolar:
-    # Kuyumcu Formülü ile Canlı Has Hesabı
     canli_has = (ons / 31.1034768) * dolar
     degisim_orani = canli_has / st.session_state.ref_has if st.session_state.ref_has > 0 else 1
     
