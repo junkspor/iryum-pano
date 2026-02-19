@@ -53,35 +53,32 @@ if 's_adj' not in st.session_state: st.session_state.s_adj = 0.0
 # --- 4. BAŞLIK ---
 st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(25px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
 
-# --- 5. FİYAT GİRİŞ PANELİ (AÇILDIĞINDA BOMBOŞ GELECEK) ---
+# --- 5. FİYAT GİRİŞ PANELİ (HATAYA KARŞI DÜZLEŞTİRİLDİ) ---
 with st.expander("⚙️ FİYATLARI GİRMEK VE GÜNCELLEMEK İÇİN BURAYA TIKLAYIN ⚙️", expanded=True):
     with st.form(key="fiyat_formu"):
         st.markdown("### 1. Referans Has Fiyatı")
         y_ref = st.number_input("O ANKİ HAS FİYATI:", value=st.session_state.ref_has, step=10.0, placeholder="Örn: 7350.00")
         
         st.markdown("### 2. Tek Fiyatlı Ürünler")
-        col1, col2 = st.columns(2)
-        with col1:
-            y_24 = st.number_input("24 Ayar (Sadece Satış)", value=st.session_state.g_24, step=10.0, placeholder="Örn: 7350.00")
-y_22_s = st.number_input("22 Ayar (SATIŞ)", value=st.session_state.g_22_s, step=10.0, placeholder="Örn: 7300.00")
-        with col2:
-            y_14 = st.number_input("14 Ayar (Sadece Satış)", value=st.session_state.g_14, step=10.0, placeholder="Örn: 6900.00")
-            y_22_a = st.number_input("22 Ayar (ALIŞ)", value=st.session_state.g_22_a, step=10.0, placeholder="Örn: 6400.00")
+        c1, c2 = st.columns(2)
+        y_24 = c1.number_input("24 Ayar (Sadece Satış)", value=st.session_state.g_24, step=10.0, placeholder="Örn: 7350.00")
+y_22_s = c1.number_input("22 Ayar (SATIŞ)", value=st.session_state.g_22_s, step=10.0, placeholder="Örn: 7300.00")
+        y_14 = c2.number_input("14 Ayar (Sadece Satış)", value=st.session_state.g_14, step=10.0, placeholder="Örn: 6900.00")
+        y_22_a = c2.number_input("22 Ayar (ALIŞ)", value=st.session_state.g_22_a, step=10.0, placeholder="Örn: 6400.00")
             
         st.markdown("### 3. Çift Fiyatlı Ürünler (Alış - Satış)")
-        col3, col4 = st.columns(2)
-        with col3:
-            y_besli_a = st.number_input("Beşli (Alış)", value=st.session_state.g_besli_a, step=10.0, placeholder="Örn: 240000.00")
-            y_tam_a = st.number_input("Tam (Alış)", value=st.session_state.g_tam_a, step=10.0, placeholder="Örn: 48000.00")
-            y_yarim_a = st.number_input("Yarım (Alış)", value=st.session_state.g_yarim_a, step=10.0, placeholder="Örn: 23300.00")
-            y_ceyrek_a = st.number_input("Çeyrek (Alış)", value=st.session_state.g_ceyrek_a, step=10.0, placeholder="Örn: 11650.00")
-            y_gram_a = st.number_input("Gram (Alış)", value=st.session_state.g_gram_a, step=10.0, placeholder="Örn: 7150.00")
-        with col4:
-            y_besli_s = st.number_input("Beşli (Satış)", value=st.session_state.g_besli_s, step=10.0, placeholder="Örn: 251500.00")
-            y_tam_s = st.number_input("Tam (Satış)", value=st.session_state.g_tam_s, step=10.0, placeholder="Örn: 50300.00")
-            y_yarim_s = st.number_input("Yarım (Satış)", value=st.session_state.g_yarim_s, step=10.0, placeholder="Örn: 24500.00")
-            y_ceyrek_s = st.number_input("Çeyrek (Satış)", value=st.session_state.g_ceyrek_s, step=10.0, placeholder="Örn: 12250.00")
-            y_gram_s = st.number_input("Gram (Satış)", value=st.session_state.g_gram_s, step=10.0, placeholder="Örn: 7550.00")
+        c3, c4 = st.columns(2)
+        y_besli_a = c3.number_input("Beşli (Alış)", value=st.session_state.g_besli_a, step=10.0, placeholder="Örn: 240000.00")
+        y_tam_a = c3.number_input("Tam (Alış)", value=st.session_state.g_tam_a, step=10.0, placeholder="Örn: 48000.00")
+        y_yarim_a = c3.number_input("Yarım (Alış)", value=st.session_state.g_yarim_a, step=10.0, placeholder="Örn: 23300.00")
+        y_ceyrek_a = c3.number_input("Çeyrek (Alış)", value=st.session_state.g_ceyrek_a, step=10.0, placeholder="Örn: 11650.00")
+        y_gram_a = c3.number_input("Gram (Alış)", value=st.session_state.g_gram_a, step=10.0, placeholder="Örn: 7150.00")
+        
+        y_besli_s = c4.number_input("Beşli (Satış)", value=st.session_state.g_besli_s, step=10.0, placeholder="Örn: 251500.00")
+        y_tam_s = c4.number_input("Tam (Satış)", value=st.session_state.g_tam_s, step=10.0, placeholder="Örn: 50300.00")
+        y_yarim_s = c4.number_input("Yarım (Satış)", value=st.session_state.g_yarim_s, step=10.0, placeholder="Örn: 24500.00")
+        y_ceyrek_s = c4.number_input("Çeyrek (Satış)", value=st.session_state.g_ceyrek_s, step=10.0, placeholder="Örn: 12250.00")
+        y_gram_s = c4.number_input("Gram (Satış)", value=st.session_state.g_gram_s, step=10.0, placeholder="Örn: 7550.00")
 
         st.markdown("### 4. Hızlı Makas Ayarı (Zorunlu Değil)")
         y_a_adj = st.slider("Tüm Alışlara Ekle/Çıkar", -500.0, 500.0, float(st.session_state.a_adj), step=1.0)
@@ -122,9 +119,9 @@ fiyat_sozlugu = {
     "GRAM (HAS)":     [st.session_state.g_gram_a or 0.0, st.session_state.g_gram_s or 0.0]
 }
 # --- 6. TABLO BAŞLIKLARI ---
-c1, c2, c3 = st.columns([1.2, 1, 1])
-with c2: st.markdown('<div class="header-container"><div class="header-text">ALIŞ</div></div>', unsafe_allow_html=True)
-with c3: st.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
+c1_h, c2_h, c3_h = st.columns([1.2, 1, 1])
+with c2_h: st.markdown('<div class="header-container"><div class="header-text">ALIŞ</div></div>', unsafe_allow_html=True)
+with c3_h: st.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
 
 # --- 7. VERİ ÇEKME VE HESAPLAMA ---
 def turkiye_saati_al():
@@ -153,7 +150,6 @@ if ons and dolar:
         g_a = (ref_a * degisim_orani) + st.session_state.a_adj if ref_a > 0 else 0
         g_s = (ref_s * degisim_orani) + st.session_state.s_adj if ref_s > 0 else 0
         
-        # Eğer rakam girilmemişse (0.0 ise) ekranda yatay çizgi göster
         a_h = f'<span class="price-buy">{g_a:,.2f}</span>' if g_a > 0 else '<span class="price-buy hidden">----</span>'
         s_h = f'<span class="price-sell">{g_s:,.2f}</span>' if g_s > 0 else '<span class="price-sell hidden">----</span>'
         
