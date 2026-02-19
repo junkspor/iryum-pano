@@ -28,6 +28,8 @@ st.markdown("""
     .price-buy { font-size: clamp(18px, 4.5vw, 55px); font-weight: bold; color: #2ecc71; font-family: 'Courier New', monospace; text-align: right; }
     .price-sell { font-size: clamp(20px, 5.5vw, 70px); font-weight: 900; color: #00ff00; font-family: 'Courier New', monospace; text-shadow: 0 0 10px rgba(0, 255, 0, 0.5); margin-left: 10px; }
     .hidden { visibility: hidden; }
+    /* Form içindeki başlıkları biraz küçültelim ki mobilde şık dursun */
+    .form-urun-baslik { color: #aaa; margin-top: 15px; margin-bottom: -15px; font-size: 16px; font-weight: bold;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -45,7 +47,6 @@ if not ons or not dolar:
     st.error("Borsa verisi çekilemedi. İnternet bağlantısını kontrol edin.")
     st.stop()
 
-# Uluslararası formüle göre teorik Has
 canli_teorik_has = (ons / 31.1034768) * dolar
 
 # --- 4. HAFIZA KURULUMU ---
@@ -53,9 +54,7 @@ def hafiza_kur(degisken, baslangic=0.0):
     if degisken not in st.session_state:
         st.session_state[degisken] = baslangic
 
-# Sistemin arka planda baz alacağı teorik fiyat kilidi
 hafiza_kur('kayitli_teorik_has', canli_teorik_has)
-
 hafiza_kur('g_24')
 hafiza_kur('g_22_s')
 hafiza_kur('g_14')
@@ -71,39 +70,50 @@ hafiza_kur('g_ceyrek_s')
 hafiza_kur('g_gram_a')
 hafiza_kur('g_gram_s')
 
-# --- 5. BAŞLIK VE FİYAT GİRİŞ FORMU ---
+# --- 5. BAŞLIK VE FİYAT GİRİŞ FORMU (MOBİL UYUMLU DİZİLİM) ---
 st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(25px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
 
 exp = st.expander("⚙️ FİYATLARI GİRMEK VE GÜNCELLEMEK İÇİN BURAYA TIKLAYIN ⚙️", expanded=True)
 frm = exp.form(key="fiyat_formu")
 
-frm.markdown("### 1. Ürünlerin İlk Fiyatları")
-c1, c2 = frm.columns(2)
-y_24 = c1.number_input("24 Ayar (HAS)", value=float(st.session_state.g_24), step=10.0)
-y_22_s = c1.number_input("22 Ayar (SATIŞ)", value=float(st.session_state.g_22_s), step=10.0)
-y_14 = c2.number_input("14 Ayar", value=float(st.session_state.g_14), step=10.0)
-y_22_a = c2.number_input("22 Ayar (ALIŞ)", value=float(st.session_state.g_22_a), step=10.0)
+frm.markdown("### 1. Tek Fiyatlı Ürünler")
+y_24 = frm.number_input("24 Ayar (HAS)", value=float(st.session_state.g_24), step=10.0)
+y_22_s = frm.number_input("22 Ayar (SATIŞ)", value=float(st.session_state.g_22_s), step=10.0)
+y_14 = frm.number_input("14 Ayar", value=float(st.session_state.g_14), step=10.0)
+y_22_a = frm.number_input("22 Ayar (ALIŞ)", value=float(st.session_state.g_22_a), step=10.0)
 
 frm.markdown("### 2. Sarrafiye Grubu (Alış - Satış)")
-c3, c4 = frm.columns(2)
-y_besli_a = c3.number_input("Beşli (Alış)", value=float(st.session_state.g_besli_a), step=10.0)
-y_tam_a = c3.number_input("Tam (Alış)", value=float(st.session_state.g_tam_a), step=10.0)
-y_yarim_a = c3.number_input("Yarım (Alış)", value=float(st.session_state.g_yarim_a), step=10.0)
-y_ceyrek_a = c3.number_input("Çeyrek (Alış)", value=float(st.session_state.g_ceyrek_a), step=10.0)
-y_gram_a = c3.number_input("Gram (Alış)", value=float(st.session_state.g_gram_a), step=10.0)
 
-y_besli_s = c4.number_input("Beşli (Satış)", value=float(st.session_state.g_besli_s), step=10.0)
-y_tam_s = c4.number_input("Tam (Satış)", value=float(st.session_state.g_tam_s), step=10.0)
-y_yarim_s = c4.number_input("Yarım (Satış)", value=float(st.session_state.g_yarim_s), step=10.0)
-y_ceyrek_s = c4.number_input("Çeyrek (Satış)", value=float(st.session_state.g_ceyrek_s), step=10.0)
-y_gram_s = c4.number_input("Gram (Satış)", value=float(st.session_state.g_gram_s), step=10.0)
+frm.markdown('<p class="form-urun-baslik">BEŞLİ</p>', unsafe_allow_html=True)
+c_b1, c_b2 = frm.columns(2)
+y_besli_a = c_b1.number_input("Alış (Beşli)", value=float(st.session_state.g_besli_a), step=10.0)
+y_besli_s = c_b2.number_input("Satış (Beşli)", value=float(st.session_state.g_besli_s), step=10.0)
+frm.markdown('<p class="form-urun-baslik">TAM (ATA)</p>', unsafe_allow_html=True)
+c_t1, c_t2 = frm.columns(2)
+y_tam_a = c_t1.number_input("Alış (Tam)", value=float(st.session_state.g_tam_a), step=10.0)
+y_tam_s = c_t2.number_input("Satış (Tam)", value=float(st.session_state.g_tam_s), step=10.0)
+
+frm.markdown('<p class="form-urun-baslik">YARIM</p>', unsafe_allow_html=True)
+c_y1, c_y2 = frm.columns(2)
+y_yarim_a = c_y1.number_input("Alış (Yarım)", value=float(st.session_state.g_yarim_a), step=10.0)
+y_yarim_s = c_y2.number_input("Satış (Yarım)", value=float(st.session_state.g_yarim_s), step=10.0)
+
+frm.markdown('<p class="form-urun-baslik">ÇEYREK</p>', unsafe_allow_html=True)
+c_c1, c_c2 = frm.columns(2)
+y_ceyrek_a = c_c1.number_input("Alış (Çeyrek)", value=float(st.session_state.g_ceyrek_a), step=10.0)
+y_ceyrek_s = c_c2.number_input("Satış (Çeyrek)", value=float(st.session_state.g_ceyrek_s), step=10.0)
+
+frm.markdown('<p class="form-urun-baslik">GRAM (HAS)</p>', unsafe_allow_html=True)
+c_g1, c_g2 = frm.columns(2)
+y_gram_a = c_g1.number_input("Alış (Gram)", value=float(st.session_state.g_gram_a), step=10.0)
+y_gram_s = c_g2.number_input("Satış (Gram)", value=float(st.session_state.g_gram_s), step=10.0)
+
+frm.markdown("<br>", unsafe_allow_html=True) # Araya biraz boşluk
 
 buton = frm.form_submit_button(label="✅ RAKAMLARI SİSTEME İŞLE VE GÜNCELLE")
 
 if buton:
-    # SİHİRLİ DOKUNUŞ: Butona basıldığı anki teorik fiyatı hafızaya kilitliyoruz.
     st.session_state.kayitli_teorik_has = canli_teorik_has
-    
     st.session_state.g_24 = y_24
     st.session_state.g_22_s = y_22_s
     st.session_state.g_14 = y_14
@@ -121,7 +131,6 @@ if buton:
 
 # --- 6. HESAPLAMA VE TABLO BASIMI ---
 
-# Oran = Şu anki küresel fiyat / Bizim kaydettiğimiz andaki küresel fiyat
 oran = canli_teorik_has / st.session_state.kayitli_teorik_has if st.session_state.kayitli_teorik_has > 0 else 1.0
 
 c1_h, c2_h, c3_h = st.columns([1.2, 1, 1])
