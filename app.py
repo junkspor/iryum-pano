@@ -4,32 +4,11 @@ from datetime import datetime
 import pytz
 from streamlit_autorefresh import st_autorefresh
 
-# ==============================================================
-# 💎 1. ADIM: PATRONUN HAS (24 AYAR) REFERANS ALANI 💎
-# ==============================================================
-
-# Sabah tabelayı ayarlarken ekrandaki veya baz aldığınız HAS fiyatını buraya yazın:
-REFERANS_HAS = 7350.0 
-
-# Dükkanın baz fiyatlarını buraya yazın. Format: [ALIŞ, SATIŞ]
-FIYAT_LISTESI = {
-    "24 AYAR (HAS)":  [0, 7350.00],
-    "22 AYAR SATIŞ":  [0, 7300.00],
-    "14 AYAR":        [0, 6900.00],
-    "22 AYAR ALIŞ":   [6350.00, 0],
-    "BEŞLİ":          [237500.00, 250000.00],
-    "TAM (ATA)":      [47500.00, 50000.00],
-    "YARIM":          [23100.00, 24400.00],
-    "ÇEYREK":         [11550.00, 12200.00],
-    "GRAM (HAS)":     [7100.00, 7500.00]
-}
-# ==============================================================
-
-# --- 2. SAYFA AYARLARI VE OTOMATİK YENİLEME ---
-st.set_page_config(page_title="İryum Canlı Pano", layout="wide", initial_sidebar_state="collapsed")
+# --- 1. SAYFA AYARLARI ---
+st.set_page_config(page_title="İryum Canlı Pano", layout="wide", initial_sidebar_state="expanded")
 st_autorefresh(interval=120000, key="fiyat_sayaci")
 
-# --- 3. AGRESİF REKLAM GİZLEYİCİ CSS ---
+# --- 2. REKLAM VE MENÜ GİZLEYİCİ (KUSURSUZ TABELA MODU) ---
 st.markdown("""
 <style>
     footer {visibility: hidden !important; display: none !important;}
@@ -52,7 +31,47 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 4. VERİ ÇEKME FONKSİYONLARI ---
+# --- 3. HAFIZA (SAYFA YENİLENDİĞİNDE FİYATLARIN SİLİNMEMESİ İÇİN) ---
+if 'ref_has' not in st.session_state:
+    st.session_state.ref_has = 7350.0
+if 'fiyatlar' not in st.session_state:
+    st.session_state.fiyatlar = {
+        "24 AYAR (HAS)":  [0.0, 7350.0],
+        "22 AYAR SATIŞ":  [0.0, 7300.0],
+        "14 AYAR":        [0.0, 6900.0],
+        "22 AYAR ALIŞ":   [6350.0, 0.0],
+        "BEŞLİ":          [237500.0, 250000.0],
+        "TAM (ATA)":      [47500.0, 50000.0],
+        "YARIM":          [23100.0, 24400.0],
+        "ÇEYREK":         [11550.0, 12200.0],
+        "GRAM (HAS)":     [7100.0, 7500.0]
+    }
+if 's_adj' not in st.session_state:
+    st.session_state.s_adj = 0.0
+if 'a_adj' not in st.session_state:
+    st.session_state.a_adj = 0.0
+
+# --- 4. YÖNETİCİ PANELİ (ŞİFRESİZ, HER AN DEĞİŞTİRİLEBİLİR) ---
+st.sidebar.header("📝 İRYUM FİYAT GİRİŞİ")
+st.sidebar.markdown("---")
+
+# Patronun istediği an güncelleyebileceği Referans HAS kutusu
+st.session_state.ref_has = st.sidebar.number_input("REFERANS HAS FİYATI:", value=st.session_state.ref_has, step=10.0)
+
+st.sidebar.markdown("### 🏷️ Ürünlerin İlk Fiyatları")
+st.sidebar.info("Buraya girdiğiniz rakamlar CANLI HAS değiştikçe otomatik esneyecektir.")
+
+# Tüm ürünler için alt alta açılır kapanır fiyat kutucukları
+for isim in st.session_state.fiyatlar:
+    with st.sidebar.expander(isim):
+        a = st.number_input(f"{isim} Alış", value=st.session_state.fiyatlar[isim][0], step=10.0, key=f"a_{isim}")
+        s = st.number_input(f"{isim} Satış", value=st.session_state.fiyatlar[isim][1], step=10.0, key=f"s_{isim}")
+        st.session_state.fiyatlar[isim] = [a, s]
+
+st.sidebar.markdown("### ⚙️ Hızlı Makas Ayarı (Tüm Liste)")
+st.session_state.a_adj = st.sidebar.slider("Tüm Alışlara Ekle/Çıkar", -500.0, 500.0, st.session_state.a_adj, step=1.0)
+st.session_state.s_adj = st.sidebar.slider("Tüm Satışlara Ekle/Çıkar", -500.0, 500.0, st.session_state.s_adj, step=1.0)
+# --- 5. VERİ ÇEKME FONKSİYONLARI ---
 def turkiye_saati_al():
     tz = pytz.timezone('Europe/Istanbul')
     return datetime.now(tz).strftime('%H:%M:%S')
@@ -69,12 +88,7 @@ def canli_dolar_al():
     except:
         return None
 
-# --- 5. YÖNETİCİ PANELİ ---
-st.sidebar.header("💎 İRYUM YÖNETİCİ")
-s_adj = st.sidebar.slider("Satış Fiyatlarına Ekle/Çıkar (TL)", -500.0, 500.0, 0.0, step=1.0)
-a_adj = st.sidebar.slider("Alış Fiyatlarına Ekle/Çıkar (TL)", -500.0, 500.0, 0.0, step=1.0)
-
-# --- 6. EKRANA ÇİZİM ---
+# --- 6. ANA EKRAN ÇİZİMİ ---
 st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(25px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
 
 c1, c2, c3 = st.columns([1.2, 1, 1])
@@ -83,17 +97,18 @@ with c3: st.markdown('<div class="header-container"><div class="header-text">SAT
 
 ons = canli_ons_al()
 dolar = canli_dolar_al()
+
 if ons and dolar:
-    # Kuyumcu Formülü: (Ons / 31.1034768) * Dolar
+    # Kuyumcu Formülü ile Canlı Has Hesabı
     canli_has = (ons / 31.1034768) * dolar
-    degisim_orani = canli_has / REFERANS_HAS 
+    degisim_orani = canli_has / st.session_state.ref_has if st.session_state.ref_has > 0 else 1
     
-    for isim, degerler in FIYAT_LISTESI.items():
+    for isim, degerler in st.session_state.fiyatlar.items():
         ref_a = degerler[0]
         ref_s = degerler[1]
         
-        g_a = (ref_a * degisim_orani) + a_adj if ref_a > 0 else 0
-        g_s = (ref_s * degisim_orani) + s_adj if ref_s > 0 else 0
+        g_a = (ref_a * degisim_orani) + st.session_state.a_adj if ref_a > 0 else 0
+        g_s = (ref_s * degisim_orani) + st.session_state.s_adj if ref_s > 0 else 0
         
         a_h = f'<span class="price-buy">{g_a:,.2f}</span>' if g_a > 0 else '<span class="price-buy hidden">----</span>'
         s_h = f'<span class="price-sell">{g_s:,.2f}</span>' if g_s > 0 else '<span class="price-sell hidden">----</span>'
@@ -101,11 +116,6 @@ if ons and dolar:
         html = f'<div class="row-wrapper"><div class="product-name">{isim}</div><div class="price-container">{a_h}</div><div class="price-container">{s_h}</div></div>'
         st.markdown(html, unsafe_allow_html=True)
 
-    # Alt Bilgi Alanı: Hem ONS, Hem Dolar Hem de CANLI HAS eklendi
-    st.markdown(f"""
-        <div style='text-align: center; color: #555; margin-top: 25px;'>
-            ONS: {ons:,.2f} $ | USD: {dolar:,.4f} ₺ | CANLI HAS: <span style='color:#fff;'>{canli_has:,.2f} ₺</span> | Saat: {turkiye_saati_al()}
-        </div>
-    """, unsafe_allow_html=True)
+    st.markdown(f"<div style='text-align: center; color: #555; margin-top: 25px;'>ONS: {ons:,.2f} $ | USD: {dolar:,.4f} ₺ | CANLI HAS: <span style='color:#fff;'>{canli_has:,.2f} ₺</span> | Saat: {turkiye_saati_al()}</div>", unsafe_allow_html=True)
 else:
     st.error("Borsa verisi çekilemedi. İnternet bağlantısını kontrol edin.")
