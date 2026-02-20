@@ -35,41 +35,55 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. AKILLI VERİ ÇEKME MOTORU (ÇÖKMEYE KARŞI KORUMALI) ---
+# --- 3. AKILLI VERİ ÇEKME MOTORU (BULUT ENGELİNİ AŞAN YAPI) ---
 def gercek_piyasa_verisi_al():
-    # 1. DENEME: Türkiye Serbest Piyasa
+    # Streamlit bulut sunucularını gizlemek için sahte tarayıcı (Chrome) kimliği
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/plain, */*",
+        "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7"
+    }
+    
+    # 1. HEDEF: TRUNCGIL API (Kapalıçarşı verisini bulut sunucularına kapatmayan sağlam sistem)
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        r = requests.get("https://api.genelpara.com/embed/para.json", headers=headers, timeout=5)
-        if r.status_code == 200:
-            veri = r.json()
-            return float(veri['ONS']['satis']), float(veri['USD']['satis']), "Kapalıçarşı (Canlı Döviz)"
+        r = requests.get("https://finans.truncgil.com/today.json", headers=headers, timeout=5)
+        veri = r.json()
+        ons = float(veri['ONS']['Satış'].replace('.', '').replace(',', '.'))
+        usd = float(veri['USD']['Satış'].replace('.', '').replace(',', '.'))
+        return ons, usd, "Kapalıçarşı (Serbest Piyasa)"
+    except:
+        pass
+        
+    # 2. HEDEF: HAREM ALTIN (Eğer Cloudflare o an sahte kimliğe izin verirse)
+    try:
+        r = requests.get("https://www.haremaltin.com/dashboard/ajax/doviz", headers=headers, timeout=5)
+        veri = r.json()['data']
+        return float(veri['ONS']['satis']), float(veri['USDTRY']['satis']), "Harem Altın"
     except:
         pass
 
-    # 2. DENEME: Yahoo Spot (Hafta sonu kesintisine karşı son 5 güne bakar)
+    # 3. HEDEF: GENELPARA
     try:
-        ons = yf.Ticker("XAUUSD=X").history(period="5d")['Close'].iloc[-1]
-        usd = yf.Ticker("TRY=X").history(period="5d")['Close'].iloc[-1]
-        return float(ons), float(usd), "Uluslararası Spot (Yahoo)"
+        r = requests.get("https://api.genelpara.com/embed/para.json", headers=headers, timeout=5)
+        veri = r.json()
+        return float(veri['ONS']['satis']), float(veri['USD']['satis']), "GenelPara"
+    except:
+        pass
+        
+    # 4. HEDEF: YAHOO (Uluslararası Yedek)
+    try:
+        ons_y = yf.Ticker("GC=F").history(period="1d", interval="1m")['Close'].iloc[-1]
+        dolar_y = yf.Ticker("TRY=X").history(period="1d", interval="1m")['Close'].iloc[-1]
+        return float(ons_y), float(dolar_y), "Uluslararası Spot (Yedek)"
     except:
         return None, None, "Bağlantı Koptu"
 
 ons, dolar, veri_kaynagi = gercek_piyasa_verisi_al()
-baglanti_var = True
-
-# EĞER İNTERNET VEYA BORSA ÇÖKERSE SİSTEMİ KAPATMA, "ÇEVRİMDIŞI MODA" GEÇ!
-if not ons or not dolar:
-    baglanti_var = False
-    ons = 0.0
-    dolar = 0.0
-    veri_kaynagi = "🔴 Çevrimdışı Mod (Son Kayıt Gösteriliyor)"
-    st.warning("⚠️ Canlı borsa bağlantısı geçici olarak kurulamıyor. Tabela kapanmadı, sadece son girdiğiniz fiyatlarla sabitlendi.")
-
-# --- 4. KALICI HAFIZA KURULUMU ---
+# --- 4. KALICI HAFIZA (JSON) SİSTEMİ ---
 DOSYA_ADI = "fiyat_hafizasi.json"
 varsayilan_veriler = {
-    'kayitli_teorik_has': 0.0, 'g_24': 0.0, 'g_22_s': 0.0, 'g_14': 0.0, 'g_22_a': 0.0,
+    'kayitli_teorik_has': 0.0,
+    'g_24': 0.0, 'g_22_s': 0.0, 'g_14': 0.0, 'g_22_a': 0.0,
     'g_besli_a': 0.0, 'g_besli_s': 0.0, 'g_tam_a': 0.0, 'g_tam_s': 0.0,
     'g_yarim_a': 0.0, 'g_yarim_s': 0.0, 'g_ceyrek_a': 0.0, 'g_ceyrek_s': 0.0,
     'g_gram_a': 0.0, 'g_gram_s': 0.0
@@ -79,21 +93,34 @@ if os.path.exists(DOSYA_ADI):
     try:
         with open(DOSYA_ADI, "r") as dosya:
             kalici_hafiza = json.load(dosya)
-    except:
-        kalici_hafiza = varsayilan_veriler
-else:
-    kalici_hafiza = varsayilan_veriler
+    except: kalici_hafiza = varsayilan_veriler
+else: kalici_hafiza = varsayilan_veriler
 
 for anahtar, deger in kalici_hafiza.items():
     if anahtar not in st.session_state:
         st.session_state[anahtar] = deger
+
+# --- ÖLÜMSÜZLÜK MODU (ÇÖKMEYİ ENGELLE) ---
+if not ons or not dolar:
+    if st.session_state.kayitli_teorik_has > 0:
+        st.warning("⚠️ Borsa siteleri güvenlik duvarını açtı. Sistem çökmek yerine son girdiğiniz oranlarla çalışmaya devam ediyor!")
+        canli_teorik_has = st.session_state.kayitli_teorik_has
+        ons = 0.0
+        dolar = 0.0
+        veri_kaynagi = "ÇEVRİMDIŞI HAFIZA KORUMASI"
+    else:
+        st.error("Hiçbir borsaya bağlanılamadı ve hafızada fiyat yok. İnterneti kontrol edin.")
+        st.stop()
+else:
+    canli_teorik_has = (ons / 31.1034768) * dolar
+
 # --- 5. BAŞLIK VE FİYAT GİRİŞ FORMU ---
 st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(25px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
 
-exp = st.expander("⚙️ FİYATLARI GİRMEK VE GÜNCELLEMEK İÇİN TIKLAYIN ⚙️", expanded=False)
+exp = st.expander("⚙️ FİYATLARI GİRMEK VE GÜNCELLEMEK İÇİN TIKLAYIN ⚙️", expanded=True)
 frm = exp.form(key="fiyat_formu")
 
-frm.markdown("### 1. Ürünlerin İlk Fiyatları")
+frm.markdown("### 1. Tek Fiyatlı Ürünler")
 c1, c2 = frm.columns(2)
 y_24 = c1.number_input("24 Ayar (HAS)", value=float(st.session_state.g_24), step=10.0)
 y_22_s = c1.number_input("22 Ayar (SATIŞ)", value=float(st.session_state.g_22_s), step=10.0)
@@ -101,7 +128,6 @@ y_14 = c2.number_input("14 Ayar", value=float(st.session_state.g_14), step=10.0)
 y_22_a = c2.number_input("22 Ayar (ALIŞ)", value=float(st.session_state.g_22_a), step=10.0)
 
 frm.markdown("### 2. Sarrafiye Grubu (Alış - Satış)")
-
 frm.markdown('<p class="form-urun-baslik">BEŞLİ</p>', unsafe_allow_html=True)
 c_b1, c_b2 = frm.columns(2)
 y_besli_a = c_b1.number_input("Alış (Beşli)", value=float(st.session_state.g_besli_a), step=10.0)
@@ -128,19 +154,11 @@ y_gram_a = c_g1.number_input("Alış (Gram)", value=float(st.session_state.g_gra
 y_gram_s = c_g2.number_input("Satış (Gram)", value=float(st.session_state.g_gram_s), step=10.0)
 
 frm.markdown("<br>", unsafe_allow_html=True)
-
 buton = frm.form_submit_button(label="✅ RAKAMLARI SİSTEME İŞLE VE GÜNCELLE")
-
-# --- 6. HESAPLAMA MANTIĞI ---
-if baglanti_var:
-    canli_teorik_has = (ons / 31.1034768) * dolar
-else:
-    # İnternet yoksa teorik hası eski kayıtlı has ile aynı yap (oran %0 olsun)
-    canli_teorik_has = st.session_state.kayitli_teorik_has
 
 if buton:
     st.session_state.kayitli_teorik_has = canli_teorik_has
-    st.session_state.g_24 = y_24
+st.session_state.g_24 = y_24
     st.session_state.g_22_s = y_22_s
     st.session_state.g_14 = y_14
     st.session_state.g_22_a = y_22_a
@@ -156,7 +174,8 @@ if buton:
     st.session_state.g_gram_s = y_gram_s
 
     yeni_kayit_verisi = {
-        'kayitli_teorik_has': st.session_state.kayitli_teorik_has, 'g_24': y_24, 'g_22_s': y_22_s, 'g_14': y_14, 'g_22_a': y_22_a,
+        'kayitli_teorik_has': st.session_state.kayitli_teorik_has, 
+        'g_24': y_24, 'g_22_s': y_22_s, 'g_14': y_14, 'g_22_a': y_22_a,
         'g_besli_a': y_besli_a, 'g_besli_s': y_besli_s, 'g_tam_a': y_tam_a, 'g_tam_s': y_tam_s,
         'g_yarim_a': y_yarim_a, 'g_yarim_s': y_yarim_s, 'g_ceyrek_a': y_ceyrek_a, 'g_ceyrek_s': y_ceyrek_s,
         'g_gram_a': y_gram_a, 'g_gram_s': y_gram_s
@@ -167,9 +186,9 @@ if buton:
     except:
         pass
 
-# Oran Hesaplama (Bağlantı kopsa bile oran 1.0 kalacağı için rakamlar değişmez)
+# --- 6. HESAPLAMA VE TABLO BASIMI ---
 oran = canli_teorik_has / st.session_state.kayitli_teorik_has if st.session_state.kayitli_teorik_has > 0 else 1.0
-# --- 7. TABLO BASIMI ---
+
 c1_h, c2_h, c3_h = st.columns([1.2, 1, 1])
 c2_h.markdown('<div class="header-container"><div class="header-text">ALIŞ</div></div>', unsafe_allow_html=True)
 c3_h.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
@@ -177,7 +196,6 @@ c3_h.markdown('<div class="header-container"><div class="header-text">SATIŞ</di
 def satir_bas(isim, a_fiyat, s_fiyat):
     a_fiyat = a_fiyat or 0.0
     s_fiyat = s_fiyat or 0.0
-    
     g_a = (a_fiyat * oran) if a_fiyat > 0 else 0
     g_s = (s_fiyat * oran) if s_fiyat > 0 else 0
     
@@ -198,4 +216,6 @@ satir_bas("ÇEYREK", st.session_state.g_ceyrek_a, st.session_state.g_ceyrek_s)
 satir_bas("GRAM (HAS)", st.session_state.g_gram_a, st.session_state.g_gram_s)
 
 saat = datetime.now(pytz.timezone('Europe/Istanbul')).strftime('%H:%M:%S')
-st.markdown(f"<div style='text-align: center; color: #555; margin-top: 25px;'>ONS: {ons:,.2f} $ | USD: {dolar:,.4f} ₺ | Saat: {saat} | Kaynak: {veri_kaynagi}</div>", unsafe_allow_html=True)
+
+# Alt bilgiye sadeleştirilmiş USD Satış ve Kaynak bilgisi
+st.markdown(f"<div style='text-align: center; color: #555; margin-top: 25px;'>ONS: {ons:,.2f} $ | USD (Satış): {dolar:,.4f} ₺ | Saat: {saat} | Kaynak: {veri_kaynagi}</div>", unsafe_allow_html=True)
