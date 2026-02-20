@@ -34,46 +34,46 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HAFIZA ---
+# --- 3. HAFIZA (HATALARA KARŞI ZIRHLANDI) ---
 DOSYA_ADI = "fiyat_hafizasi.json"
 varsayilan = {'son_ons': 0.0, 'son_usd': 0.0, 'kayitli_teorik_has': 0.0, 'g_24': 0.0, 'g_22_s': 0.0, 'g_14': 0.0, 'g_22_a': 0.0, 'g_besli_a': 0.0, 'g_besli_s': 0.0, 'g_tam_a': 0.0, 'g_tam_s': 0.0, 'g_yarim_a': 0.0, 'g_yarim_s': 0.0, 'g_ceyrek_a': 0.0, 'g_ceyrek_s': 0.0, 'g_gram_a': 0.0, 'g_gram_s': 0.0}
 
-try:
-    dosya = open(DOSYA_ADI, "r")
-    kalici_hafiza = json.load(dosya)
-    dosya.close()
-except:
-    kalici_hafiza = varsayilan
-
-st.session_state.update({k: v for k, v in kalici_hafiza.items() if k not in st.session_state})
-
-# --- 4. HİBRİT VERİ ÇEKME MOTORU ---
-def veri_cek():
-    ons_val = 0.0
-    usd_val = 0.0
-    headers = {"User-Agent": "Mozilla/5.0"}
-    
-    # 1. ONS: Sırf CanlıDöviz gibi SPOT çekmek için XAUUSD kullanıyoruz (Yüksek çıkan vadeli GC=F çöpe atıldı)
+if "kurulum_tamam" not in st.session_state:
+    st.session_state.kurulum_tamam = True
+    kayitlar = {}
     try:
-        ons_val = float(yf.Ticker("XAUUSD=X").history(period="1d", interval="1m")['Close'].iloc[-1])
+        dosya = open(DOSYA_ADI, "r")
+        kayitlar = json.load(dosya)
+        dosya.close()
     except: pass
     
-    # 2. DOLAR: Kapalıçarşı Fiziki Satış (Nadir uyumlu)
+    # Eski dosyada olmayan yeni değişkenleri sıfır (0.0) olarak tamamlar, çökmez.
+    for k, v in varsayilan.items():
+        st.session_state[k] = kayitlar.get(k, v)
+
+# --- 4. HİBRİT VERİ ÇEKME MOTORU ---
+ons, dolar, kaynak = 0.0, 0.0, ""
+headers = {"User-Agent": "Mozilla/5.0"}
+
+# 1. ONS: Sırf CanlıDöviz gibi SPOT çekmek için XAUUSD kullanıyoruz.
+try: ons = float(yf.Ticker("XAUUSD=X").history(period="1d", interval="1m")['Close'].iloc[-1])
+except: pass
+
+# 2. DOLAR: Kapalıçarşı Fiziki Satış (Nadir uyumlu)
+try:
+    r = requests.get("https://finans.truncgil.com/today.json", headers=headers, timeout=5)
+    dolar = float(r.json()['USD']['Satış'].replace('.', '').replace(',', '.'))
+    kaynak = "Spot ONS & Çarşı USD"
+except:
     try:
-        r = requests.get("https://finans.truncgil.com/today.json", headers=headers, timeout=5)
-        usd_val = float(r.json()['USD']['Satış'].replace('.', '').replace(',', '.'))
+        r = requests.get("https://api.genelpara.com/embed/para.json", headers=headers, timeout=5)
+        dolar = float(r.json()['USD']['satis'])
+        kaynak = "Spot ONS & Çarşı USD"
     except:
         try:
-            r = requests.get("https://api.genelpara.com/embed/para.json", headers=headers, timeout=5)
-            usd_val = float(r.json()['USD']['satis'])
-        except:
-            try:
-                usd_val = float(yf.Ticker("TRY=X").history(period="1d", interval="1m")['Close'].iloc[-1])
-            except: pass
-            
-    return ons_val, usd_val, "Spot ONS & Çarşı USD"
-
-ons, dolar, kaynak = veri_cek()
+            dolar = float(yf.Ticker("TRY=X").history(period="1d", interval="1m")['Close'].iloc[-1])
+            kaynak = "Spot ONS & Spot USD"
+        except: pass
 
 if ons == 0.0 or dolar == 0.0:
     ons = st.session_state.son_ons
