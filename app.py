@@ -5,7 +5,6 @@ import pytz
 from streamlit_autorefresh import st_autorefresh
 import json
 import os
-import requests
 
 # --- 1. SAYFA AYARLARI ---
 st.set_page_config(page_title="İryum Canlı Pano", layout="wide")
@@ -48,45 +47,47 @@ for k, v in varsayilan.items():
     if k not in st.session_state:
         st.session_state[k] = kalici_hafiza.get(k, v)
 
-# --- 4. DOĞRUDAN YAHOO API MOTORU (ASLA ÇÖKMEZ) ---
+# --- 4. YAHOO SPOT MOTORU (BOMBOŞ KUTU KORUMALI) ---
 def veri_getir():
-    ons_val, usd_val = 0.0, 0.0
-    headers = {'User-Agent': 'Mozilla/5.0'}
+    ons_val = 0.0
+    usd_val = 0.0
     
-    # 1. YÖNTEM: Yahoo'nun Kendi Gizli Veri Damarı (En Sağlamı)
+    # YAHOO SPOT ALTIN (XAUUSD=X)
     try:
-        r_ons = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/XAUUSD=X", headers=headers, timeout=5)
-        ons_val = float(r_ons.json()['chart']['result'][0]['meta']['regularMarketPrice'])
-        
-        r_usd = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/TRY=X", headers=headers, timeout=5)
-        usd_val = float(r_usd.json()['chart']['result'][0]['meta']['regularMarketPrice'])
-        return ons_val, usd_val
+        df_ons = yf.Ticker("XAUUSD=X").history(period="1d", interval="1m")
+        if not df_ons.empty: # Eğer içi doluysa (hafta içi) canlı veriyi al
+            ons_val = float(df_ons['Close'].iloc[-1])
+        else: # Eğer içi boşsa (hafta sonu) son kapanışı al
+            ons_val = float(yf.Ticker("XAUUSD=X").history(period="5d")['Close'].iloc[-1])
     except: pass
 
-    # 2. YÖNTEM: Yfinance Kütüphanesi (Yedek - Hafta Sonu Korumalı)
+    # YAHOO USD (TRY=X)
     try:
-        ons_val = float(yf.Ticker("XAUUSD=X").history(period="5d")['Close'].dropna().iloc[-1])
-        usd_val = float(yf.Ticker("TRY=X").history(period="5d")['Close'].dropna().iloc[-1])
+        df_usd = yf.Ticker("TRY=X").history(period="1d", interval="1m")
+        if not df_usd.empty:
+            usd_val = float(df_usd['Close'].iloc[-1])
+        else:
+            usd_val = float(yf.Ticker("TRY=X").history(period="5d")['Close'].iloc[-1])
     except: pass
         
     return ons_val, usd_val
 
 ons, dolar = veri_getir()
 
-# Eğer iki yöntem de anlık koparsa, eski hafızayı kullan
+# Eğer Yahoo tamamen çökerse eski hafızayı kullan
 if ons == 0.0 or dolar == 0.0:
     ons = st.session_state.get('son_ons', 0.0)
     dolar = st.session_state.get('son_usd', 0.0)
 
-# Ekranda uyarı ver ama SAKIN sistemi kilitleme! (st.stop söküldü)
 if ons == 0.0 or dolar == 0.0:
-    st.error("⚠️ Yahoo Finance sunucularına şu an erişilemiyor. Lütfen paneli birazdan yenileyin. (Formu kullanmaya devam edebilirsiniz)")
+    st.error("Yahoo verisi çekilemedi. Lütfen sayfayı yenileyin.")
+    st.stop()
+
 st.session_state.update({'son_ons': ons, 'son_usd': dolar})
-canli_teorik_has = (ons / 31.1034768) * dolar if (ons > 0 and dolar > 0) else 0.0
+canli_teorik_has = (ons / 31.1034768) * dolar
 
 # --- 5. EKRAN VE GİRİŞ FORMU ---
 st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(25px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
-
 exp = st.expander("⚙️ FİYATLARI GİRMEK VE GÜNCELLEMEK İÇİN TIKLAYIN ⚙️", expanded=True)
 frm = exp.form(key="fiyat_formu")
 
@@ -143,7 +144,7 @@ ch3.markdown('<div class="header-container"><div class="header-text">SATIŞ</div
 urunler = [
     ("24 AYAR (HAS)", 0.0, st.session_state.get('g_24', 0.0)),
     ("22 AYAR SATIŞ", 0.0, st.session_state.get('g_22_s', 0.0)),
-("14 AYAR", 0.0, st.session_state.get('g_14', 0.0)),
+    ("14 AYAR", 0.0, st.session_state.get('g_14', 0.0)),
     ("22 AYAR ALIŞ", st.session_state.get('g_22_a', 0.0), 0.0),
     ("BEŞLİ", st.session_state.get('g_besli_a', 0.0), st.session_state.get('g_besli_s', 0.0)),
     ("TAM (ATA)", st.session_state.get('g_tam_a', 0.0), st.session_state.get('g_tam_s', 0.0)),
@@ -151,7 +152,6 @@ urunler = [
     ("ÇEYREK", st.session_state.get('g_ceyrek_a', 0.0), st.session_state.get('g_ceyrek_s', 0.0)),
     ("GRAM (HAS)", st.session_state.get('g_gram_a', 0.0), st.session_state.get('g_gram_s', 0.0))
 ]
-
 html_satirlar = "".join([f'<div class="row-wrapper"><div class="product-name">{i}</div><div class="price-container">{"<span class=\'price-buy\'>" + f"{a*oran:,.2f}" + "</span>" if a>0 else "<span class=\'price-buy hidden\'>----</span>"}</div><div class="price-container">{"<span class=\'price-sell\'>" + f"{s*oran:,.2f}" + "</span>" if s>0 else "<span class=\'price-sell hidden\'>----</span>"}</div></div>' for i, a, s in urunler])
 
 st.markdown(html_satirlar, unsafe_allow_html=True)
