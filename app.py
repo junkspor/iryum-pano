@@ -35,11 +35,11 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. AKILLI VERİ ÇEKME MOTORU (KAPALIÇARŞI + SPOT) ---
+# --- 3. AKILLI VERİ ÇEKME MOTORU (GECE VE HAFTA SONU KORUMALI) ---
 def gercek_piyasa_verisi_al():
-    # 1. DENEME: Türkiye Serbest Piyasa (Canlı Döviz / Tahtakale)
+    # 1. DENEME: Türkiye Serbest Piyasa (GenelPara API)
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
         r = requests.get("https://api.genelpara.com/embed/para.json", headers=headers, timeout=5)
         if r.status_code == 200:
             veri = r.json()
@@ -49,22 +49,25 @@ def gercek_piyasa_verisi_al():
     except:
         pass
 
-    # 2. DENEME: Yahoo Finance (SADECE GERÇEK SPOT ALTIN: XAUUSD=X)
-    # Eski yüksek çıkan GC=F (Vadeli) kodu tamamen çöpe atıldı!
+    # 2. DENEME: Yahoo Finance (Gece ve Hafta Sonu Korumalı)
     try:
-        ons = yf.Ticker("XAUUSD=X").history(period="1d", interval="1m")['Close'].iloc[-1]
-        usd = yf.Ticker("TRY=X").history(period="1d", interval="1m")['Close'].iloc[-1]
+        # Piyasalar kapanmış olabilir diye son 5 günün verisini çekip, en son geçerli rakamı alıyoruz.
+        ons_data = yf.Ticker("XAUUSD=X").history(period="5d")
+        usd_data = yf.Ticker("TRY=X").history(period="5d")
+        
+        ons = ons_data['Close'].iloc[-1]
+        usd = usd_data['Close'].iloc[-1]
         return float(ons), float(usd), "Uluslararası Spot (Yahoo)"
     except:
         return None, None, "Bağlantı Hatası"
 
 ons, dolar, veri_kaynagi = gercek_piyasa_verisi_al()
 
+# Eğer her iki kaynak da çökerse sistemi uyar
 if not ons or not dolar:
-    st.error("Piyasa verisi çekilemedi. İnternet bağlantısını kontrol edin.")
+    st.error("Piyasa verisi çekilemedi. (Lütfen GitHub'daki requirements.txt dosyanızda 'requests' yazdığından emin olun).")
     st.stop()
 
-# Anlık Has Hesaplaması
 canli_teorik_has = (ons / 31.1034768) * dolar
 
 # --- 4. KALICI HAFIZA KURULUMU ---
@@ -84,11 +87,11 @@ if os.path.exists(DOSYA_ADI):
         kalici_hafiza = varsayilan_veriler
 else:
     kalici_hafiza = varsayilan_veriler
-
 for anahtar, deger in kalici_hafiza.items():
     if anahtar not in st.session_state:
         st.session_state[anahtar] = deger
-# --- 5. BAŞLIK VE EN SADE FİYAT GİRİŞ FORMU ---
+
+# --- 5. BAŞLIK VE FİYAT GİRİŞ FORMU ---
 st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(25px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
 
 exp = st.expander("⚙️ FİYATLARI GİRMEK VE GÜNCELLEMEK İÇİN TIKLAYIN ⚙️", expanded=True)
@@ -163,10 +166,10 @@ if buton:
 
 # --- 6. HESAPLAMA VE TABLO BASIMI ---
 oran = canli_teorik_has / st.session_state.kayitli_teorik_has if st.session_state.kayitli_teorik_has > 0 else 1.0
-
 c1_h, c2_h, c3_h = st.columns([1.2, 1, 1])
 c2_h.markdown('<div class="header-container"><div class="header-text">ALIŞ</div></div>', unsafe_allow_html=True)
 c3_h.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
+
 def satir_bas(isim, a_fiyat, s_fiyat):
     a_fiyat = a_fiyat or 0.0
     s_fiyat = s_fiyat or 0.0
@@ -192,5 +195,4 @@ satir_bas("GRAM (HAS)", st.session_state.g_gram_a, st.session_state.g_gram_s)
 
 saat = datetime.now(pytz.timezone('Europe/Istanbul')).strftime('%H:%M:%S')
 
-# Alt bilgiye Veri Kaynağı eklendi ki patron nereden çektiğimizi görsün
 st.markdown(f"<div style='text-align: center; color: #555; margin-top: 25px;'>ONS: {ons:,.2f} $ | USD: {dolar:,.4f} ₺ | Saat: {saat} | Kaynak: {veri_kaynagi}</div>", unsafe_allow_html=True)
