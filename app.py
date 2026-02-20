@@ -38,36 +38,47 @@ st.markdown("""
 DOSYA_ADI = "fiyat_hafizasi.json"
 varsayilan = {'son_ons': 0.0, 'son_usd': 0.0, 'kayitli_teorik_has': 0.0, 'g_24': 0.0, 'g_22_s': 0.0, 'g_14': 0.0, 'g_22_a': 0.0, 'g_besli_a': 0.0, 'g_besli_s': 0.0, 'g_tam_a': 0.0, 'g_tam_s': 0.0, 'g_yarim_a': 0.0, 'g_yarim_s': 0.0, 'g_ceyrek_a': 0.0, 'g_ceyrek_s': 0.0, 'g_gram_a': 0.0, 'g_gram_s': 0.0}
 
-if os.path.exists(DOSYA_ADI):
-    try:
-        with open(DOSYA_ADI, "r") as dosya: kalici_hafiza = json.load(dosya)
-    except: kalici_hafiza = varsayilan
-else: kalici_hafiza = varsayilan
+try:
+    dosya = open(DOSYA_ADI, "r")
+    kalici_hafiza = json.load(dosya)
+    dosya.close()
+except:
+    kalici_hafiza = varsayilan
 
 st.session_state.update({k: v for k, v in kalici_hafiza.items() if k not in st.session_state})
 
-# --- 4. VERİ ÇEKME ---
-def veri_cek():
-    headers = {"User-Agent": "Mozilla/5.0"}
-    try:
-        r = requests.get("https://finans.truncgil.com/today.json", headers=headers, timeout=5)
-        v = r.json()
-        return float(v['ONS']['Satış'].replace('.', '').replace(',', '.')), float(v['USD']['Satış'].replace('.', '').replace(',', '.')), "Kapalıçarşı (Truncgil)"
-    except: pass
+# --- 4. VERİ ÇEKME MOTORU ---
+ons, dolar, kaynak = 0.0, 0.0, ""
+headers = {"User-Agent": "Mozilla/5.0"}
+
+try:
+    r = requests.get("https://finans.truncgil.com/today.json", headers=headers, timeout=5)
+    v = r.json()
+    ons = float(v['ONS']['Satış'].replace('.', '').replace(',', '.'))
+    dolar = float(v['USD']['Satış'].replace('.', '').replace(',', '.'))
+    kaynak = "Kapalıçarşı (Truncgil)"
+except:
+    pass
+
+if ons == 0.0:
     try:
         r = requests.get("https://api.genelpara.com/embed/para.json", headers=headers, timeout=5)
         v = r.json()
-        return float(v['ONS']['satis']), float(v['USD']['satis']), "GenelPara"
-    except: pass
+        ons = float(v['ONS']['satis'])
+        dolar = float(v['USD']['satis'])
+        kaynak = "GenelPara"
+    except:
+        pass
+
+if ons == 0.0:
     try:
-        o = float(yf.Ticker("GC=F").history(period="1d", interval="1m")['Close'].iloc[-1])
-        u = float(yf.Ticker("TRY=X").history(period="1d", interval="1m")['Close'].iloc[-1])
-        return o, u, "Uluslararası Spot"
-    except: return None, None, "Çevrimdışı Hafıza"
+        ons = float(yf.Ticker("GC=F").history(period="1d", interval="1m")['Close'].iloc[-1])
+        dolar = float(yf.Ticker("TRY=X").history(period="1d", interval="1m")['Close'].iloc[-1])
+        kaynak = "Uluslararası Spot"
+    except:
+        pass
 
-ons, dolar, kaynak = veri_cek()
-
-if not ons or not dolar:
+if ons == 0.0 or dolar == 0.0:
     ons = st.session_state.son_ons
     dolar = st.session_state.son_usd
     kaynak = "Çevrimdışı (Son Kayıt)"
@@ -78,78 +89,80 @@ if ons == 0.0 or dolar == 0.0:
 
 st.session_state.update({'son_ons': ons, 'son_usd': dolar})
 canli_teorik_has = (ons / 31.1034768) * dolar
-# --- 5. EKRAN VE GİRİŞ ---
+# --- 5. EKRAN VE GİRİŞ FORMU ---
 st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(25px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
 
-with st.expander("⚙️ FİYATLARI GİRMEK VE GÜNCELLEMEK İÇİN TIKLAYIN ⚙️", expanded=True):
-    with st.form(key="fiyat_formu"):
-        st.markdown("### 1. Tek Fiyatlı Ürünler")
-        c1, c2 = st.columns(2)
-        y_24 = c1.number_input("24 Ayar (HAS)", value=float(st.session_state.g_24), step=10.0)
-        y_22_s = c1.number_input("22 Ayar (SATIŞ)", value=float(st.session_state.g_22_s), step=10.0)
-        y_14 = c2.number_input("14 Ayar", value=float(st.session_state.g_14), step=10.0)
-        y_22_a = c2.number_input("22 Ayar (ALIŞ)", value=float(st.session_state.g_22_a), step=10.0)
+exp = st.expander("⚙️ FİYATLARI GİRMEK VE GÜNCELLEMEK İÇİN TIKLAYIN ⚙️", expanded=True)
+frm = exp.form(key="fiyat_formu")
 
-        st.markdown("### 2. Sarrafiye Grubu (Alış - Satış)")
-        st.markdown('<p class="form-urun-baslik">BEŞLİ</p>', unsafe_allow_html=True)
-        cb1, cb2 = st.columns(2)
-        y_besli_a = cb1.number_input("Alış (Beşli)", value=float(st.session_state.g_besli_a), step=10.0)
-        y_besli_s = cb2.number_input("Satış (Beşli)", value=float(st.session_state.g_besli_s), step=10.0)
+frm.markdown("### 1. Tek Fiyatlı Ürünler")
+c1, c2 = frm.columns(2)
+y_24 = c1.number_input("24 Ayar (HAS)", value=float(st.session_state.g_24), step=10.0)
+y_22_s = c1.number_input("22 Ayar (SATIŞ)", value=float(st.session_state.g_22_s), step=10.0)
+y_14 = c2.number_input("14 Ayar", value=float(st.session_state.g_14), step=10.0)
+y_22_a = c2.number_input("22 Ayar (ALIŞ)", value=float(st.session_state.g_22_a), step=10.0)
 
-        st.markdown('<p class="form-urun-baslik">TAM (ATA)</p>', unsafe_allow_html=True)
-        ct1, ct2 = st.columns(2)
-        y_tam_a = ct1.number_input("Alış (Tam)", value=float(st.session_state.g_tam_a), step=10.0)
-        y_tam_s = ct2.number_input("Satış (Tam)", value=float(st.session_state.g_tam_s), step=10.0)
+frm.markdown("### 2. Sarrafiye Grubu (Alış - Satış)")
+frm.markdown('<p class="form-urun-baslik">BEŞLİ</p>', unsafe_allow_html=True)
+cb1, cb2 = frm.columns(2)
+y_besli_a = cb1.number_input("Alış (Beşli)", value=float(st.session_state.g_besli_a), step=10.0)
+y_besli_s = cb2.number_input("Satış (Beşli)", value=float(st.session_state.g_besli_s), step=10.0)
 
-        st.markdown('<p class="form-urun-baslik">YARIM</p>', unsafe_allow_html=True)
-        cy1, cy2 = st.columns(2)
-        y_yarim_a = cy1.number_input("Alış (Yarım)", value=float(st.session_state.g_yarim_a), step=10.0)
-        y_yarim_s = cy2.number_input("Satış (Yarım)", value=float(st.session_state.g_yarim_s), step=10.0)
+frm.markdown('<p class="form-urun-baslik">TAM (ATA)</p>', unsafe_allow_html=True)
+ct1, ct2 = frm.columns(2)
+y_tam_a = ct1.number_input("Alış (Tam)", value=float(st.session_state.g_tam_a), step=10.0)
+y_tam_s = ct2.number_input("Satış (Tam)", value=float(st.session_state.g_tam_s), step=10.0)
 
-        st.markdown('<p class="form-urun-baslik">ÇEYREK</p>', unsafe_allow_html=True)
-        cc1, cc2 = st.columns(2)
-        y_ceyrek_a = cc1.number_input("Alış (Çeyrek)", value=float(st.session_state.g_ceyrek_a), step=10.0)
-        y_ceyrek_s = cc2.number_input("Satış (Çeyrek)", value=float(st.session_state.g_ceyrek_s), step=10.0)
+frm.markdown('<p class="form-urun-baslik">YARIM</p>', unsafe_allow_html=True)
+cy1, cy2 = frm.columns(2)
+y_yarim_a = cy1.number_input("Alış (Yarım)", value=float(st.session_state.g_yarim_a), step=10.0)
+y_yarim_s = cy2.number_input("Satış (Yarım)", value=float(st.session_state.g_yarim_s), step=10.0)
 
-        st.markdown('<p class="form-urun-baslik">GRAM (HAS)</p>', unsafe_allow_html=True)
-        cg1, cg2 = st.columns(2)
-        y_gram_a = cg1.number_input("Alış (Gram)", value=float(st.session_state.g_gram_a), step=10.0)
-        y_gram_s = cg2.number_input("Satış (Gram)", value=float(st.session_state.g_gram_s), step=10.0)
+frm.markdown('<p class="form-urun-baslik">ÇEYREK</p>', unsafe_allow_html=True)
+cc1, cc2 = frm.columns(2)
+y_ceyrek_a = cc1.number_input("Alış (Çeyrek)", value=float(st.session_state.g_ceyrek_a), step=10.0)
+y_ceyrek_s = cc2.number_input("Satış (Çeyrek)", value=float(st.session_state.g_ceyrek_s), step=10.0)
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        buton = st.form_submit_button(label="✅ RAKAMLARI SİSTEME İŞLE VE GÜNCELLE")
+frm.markdown('<p class="form-urun-baslik">GRAM (HAS)</p>', unsafe_allow_html=True)
+cg1, cg2 = frm.columns(2)
+y_gram_a = cg1.number_input("Alış (Gram)", value=float(st.session_state.g_gram_a), step=10.0)
+y_gram_s = cg2.number_input("Satış (Gram)", value=float(st.session_state.g_gram_s), step=10.0)
 
-# --- 6. İŞLEM (HATA VEREN KISIM TEK SATIRA İNDİRİLDİ) ---
+frm.markdown("<br>", unsafe_allow_html=True)
+buton = frm.form_submit_button(label="✅ RAKAMLARI SİSTEME İŞLE VE GÜNCELLE")
+
+# --- 6. KAYIT İŞLEMİ ---
 if buton:
     veri_paketi = {'kayitli_teorik_has': canli_teorik_has, 'g_24': y_24, 'g_22_s': y_22_s, 'g_14': y_14, 'g_22_a': y_22_a, 'g_besli_a': y_besli_a, 'g_besli_s': y_besli_s, 'g_tam_a': y_tam_a, 'g_tam_s': y_tam_s, 'g_yarim_a': y_yarim_a, 'g_yarim_s': y_yarim_s, 'g_ceyrek_a': y_ceyrek_a, 'g_ceyrek_s': y_ceyrek_s, 'g_gram_a': y_gram_a, 'g_gram_s': y_gram_s, 'son_ons': ons, 'son_usd': dolar}
     st.session_state.update(veri_paketi)
     try:
-        with open(DOSYA_ADI, "w") as d: json.dump(veri_paketi, d)
-    except: pass
+        dosya = open(DOSYA_ADI, "w")
+        json.dump(veri_paketi, dosya)
+        dosya.close()
+    except:
+        pass
 
-# --- 7. TABLO BASIMI ---
+# --- 7. TABLO BASIMI (HATA VEREN YER TEK SATIRA İNDİRİLDİ) ---
 oran = canli_teorik_has / st.session_state.kayitli_teorik_has if st.session_state.kayitli_teorik_has > 0 else 1.0
 
 ch1, ch2, ch3 = st.columns([1.2, 1, 1])
 ch2.markdown('<div class="header-container"><div class="header-text">ALIŞ</div></div>', unsafe_allow_html=True)
 ch3.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
 
-def satir_bas(isim, a_fiyat, s_fiyat):
-    g_a = (a_fiyat * oran) if a_fiyat else 0
-    g_s = (s_fiyat * oran) if s_fiyat else 0
-    a_html = f'<span class="price-buy">{g_a:,.2f}</span>' if g_a > 0 else '<span class="price-buy hidden">----</span>'
-s_html = f'<span class="price-sell">{g_s:,.2f}</span>' if g_s > 0 else '<span class="price-sell hidden">----</span>'
-    st.markdown(f'<div class="row-wrapper"><div class="product-name">{isim}</div><div class="price-container">{a_html}</div><div class="price-container">{s_html}</div></div>', unsafe_allow_html=True)
+urunler = [
+    ("24 AYAR (HAS)", 0.0, st.session_state.g_24),
+    ("22 AYAR SATIŞ", 0.0, st.session_state.g_22_s),
+    ("14 AYAR", 0.0, st.session_state.g_14),
+    ("22 AYAR ALIŞ", st.session_state.g_22_a, 0.0),
+    ("BEŞLİ", st.session_state.g_besli_a, st.session_state.g_besli_s),
+    ("TAM (ATA)", st.session_state.g_tam_a, st.session_state.g_tam_s),
+    ("YARIM", st.session_state.g_yarim_a, st.session_state.g_yarim_s),
+    ("ÇEYREK", st.session_state.g_ceyrek_a, st.session_state.g_ceyrek_s),
+    ("GRAM (HAS)", st.session_state.g_gram_a, st.session_state.g_gram_s)
+]
+html_satirlar = "".join([f'<div class="row-wrapper"><div class="product-name">{i}</div><div class="price-container">{"<span class=\'price-buy\'>" + f"{a*oran:,.2f}" + "</span>" if a>0 else "<span class=\'price-buy hidden\'>----</span>"}</div><div class="price-container">{"<span class=\'price-sell\'>" + f"{s*oran:,.2f}" + "</span>" if s>0 else "<span class=\'price-sell hidden\'>----</span>"}</div></div>' for i, a, s in urunler])
 
-satir_bas("24 AYAR (HAS)", 0.0, st.session_state.g_24)
-satir_bas("22 AYAR SATIŞ", 0.0, st.session_state.g_22_s)
-satir_bas("14 AYAR", 0.0, st.session_state.g_14)
-satir_bas("22 AYAR ALIŞ", st.session_state.g_22_a, 0.0)
-satir_bas("BEŞLİ", st.session_state.g_besli_a, st.session_state.g_besli_s)
-satir_bas("TAM (ATA)", st.session_state.g_tam_a, st.session_state.g_tam_s)
-satir_bas("YARIM", st.session_state.g_yarim_a, st.session_state.g_yarim_s)
-satir_bas("ÇEYREK", st.session_state.g_ceyrek_a, st.session_state.g_ceyrek_s)
-satir_bas("GRAM (HAS)", st.session_state.g_gram_a, st.session_state.g_gram_s)
+st.markdown(html_satirlar, unsafe_allow_html=True)
 
 saat = datetime.now(pytz.timezone('Europe/Istanbul')).strftime('%H:%M:%S')
 st.markdown(f"<div style='text-align: center; color: #555; margin-top: 25px;'>ONS: {ons:,.2f} $ | USD: {dolar:,.4f} ₺ | Saat: {saat} | Kaynak: {kaynak}</div>", unsafe_allow_html=True)
