@@ -47,36 +47,33 @@ except:
 
 st.session_state.update({k: v for k, v in kalici_hafiza.items() if k not in st.session_state})
 
-# --- 4. VERİ ÇEKME MOTORU ---
-ons, dolar, kaynak = 0.0, 0.0, ""
-headers = {"User-Agent": "Mozilla/5.0"}
-
-try:
-    r = requests.get("https://finans.truncgil.com/today.json", headers=headers, timeout=5)
-    v = r.json()
-    ons = float(v['ONS']['Satış'].replace('.', '').replace(',', '.'))
-    dolar = float(v['USD']['Satış'].replace('.', '').replace(',', '.'))
-    kaynak = "Kapalıçarşı (Truncgil)"
-except:
-    pass
-
-if ons == 0.0:
+# --- 4. HİBRİT VERİ ÇEKME MOTORU ---
+def veri_cek():
+    ons_val = 0.0
+    usd_val = 0.0
+    headers = {"User-Agent": "Mozilla/5.0"}
+    
+    # 1. ONS: Sırf CanlıDöviz gibi SPOT çekmek için XAUUSD kullanıyoruz (Yüksek çıkan vadeli GC=F çöpe atıldı)
     try:
-        r = requests.get("https://api.genelpara.com/embed/para.json", headers=headers, timeout=5)
-        v = r.json()
-        ons = float(v['ONS']['satis'])
-        dolar = float(v['USD']['satis'])
-        kaynak = "GenelPara"
-    except:
-        pass
-
-if ons == 0.0:
+        ons_val = float(yf.Ticker("XAUUSD=X").history(period="1d", interval="1m")['Close'].iloc[-1])
+    except: pass
+    
+    # 2. DOLAR: Kapalıçarşı Fiziki Satış (Nadir uyumlu)
     try:
-        ons = float(yf.Ticker("GC=F").history(period="1d", interval="1m")['Close'].iloc[-1])
-        dolar = float(yf.Ticker("TRY=X").history(period="1d", interval="1m")['Close'].iloc[-1])
-        kaynak = "Uluslararası Spot"
+        r = requests.get("https://finans.truncgil.com/today.json", headers=headers, timeout=5)
+        usd_val = float(r.json()['USD']['Satış'].replace('.', '').replace(',', '.'))
     except:
-        pass
+        try:
+            r = requests.get("https://api.genelpara.com/embed/para.json", headers=headers, timeout=5)
+            usd_val = float(r.json()['USD']['satis'])
+        except:
+            try:
+                usd_val = float(yf.Ticker("TRY=X").history(period="1d", interval="1m")['Close'].iloc[-1])
+            except: pass
+            
+    return ons_val, usd_val, "Spot ONS & Çarşı USD"
+
+ons, dolar, kaynak = veri_cek()
 
 if ons == 0.0 or dolar == 0.0:
     ons = st.session_state.son_ons
@@ -131,7 +128,7 @@ y_gram_s = cg2.number_input("Satış (Gram)", value=float(st.session_state.g_gra
 frm.markdown("<br>", unsafe_allow_html=True)
 buton = frm.form_submit_button(label="✅ RAKAMLARI SİSTEME İŞLE VE GÜNCELLE")
 
-# --- 6. KAYIT İŞLEMİ ---
+# --- 6. KAYIT İŞLEMİ (DÜZLEŞTİRİLDİ, HATA VERMEZ) ---
 if buton:
     veri_paketi = {'kayitli_teorik_has': canli_teorik_has, 'g_24': y_24, 'g_22_s': y_22_s, 'g_14': y_14, 'g_22_a': y_22_a, 'g_besli_a': y_besli_a, 'g_besli_s': y_besli_s, 'g_tam_a': y_tam_a, 'g_tam_s': y_tam_s, 'g_yarim_a': y_yarim_a, 'g_yarim_s': y_yarim_s, 'g_ceyrek_a': y_ceyrek_a, 'g_ceyrek_s': y_ceyrek_s, 'g_gram_a': y_gram_a, 'g_gram_s': y_gram_s, 'son_ons': ons, 'son_usd': dolar}
     st.session_state.update(veri_paketi)
@@ -139,10 +136,9 @@ if buton:
         dosya = open(DOSYA_ADI, "w")
         json.dump(veri_paketi, dosya)
         dosya.close()
-    except:
-        pass
+    except: pass
 
-# --- 7. TABLO BASIMI (HATA VEREN YER TEK SATIRA İNDİRİLDİ) ---
+# --- 7. TABLO BASIMI (DÜZLEŞTİRİLDİ, HATA VERMEZ) ---
 oran = canli_teorik_has / st.session_state.kayitli_teorik_has if st.session_state.kayitli_teorik_has > 0 else 1.0
 
 ch1, ch2, ch3 = st.columns([1.2, 1, 1])
