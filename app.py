@@ -35,40 +35,36 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. AKILLI VERİ ÇEKME MOTORU (GECE VE HAFTA SONU KORUMALI) ---
+# --- 3. AKILLI VERİ ÇEKME MOTORU (ÇÖKMEYE KARŞI KORUMALI) ---
 def gercek_piyasa_verisi_al():
-    # 1. DENEME: Türkiye Serbest Piyasa (GenelPara API)
+    # 1. DENEME: Türkiye Serbest Piyasa
     try:
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        headers = {"User-Agent": "Mozilla/5.0"}
         r = requests.get("https://api.genelpara.com/embed/para.json", headers=headers, timeout=5)
         if r.status_code == 200:
             veri = r.json()
-            ons = float(veri['ONS']['satis'])
-            usd = float(veri['USD']['satis'])
-            return ons, usd, "Kapalıçarşı (Canlı Döviz)"
+            return float(veri['ONS']['satis']), float(veri['USD']['satis']), "Kapalıçarşı (Canlı Döviz)"
     except:
         pass
 
-    # 2. DENEME: Yahoo Finance (Gece ve Hafta Sonu Korumalı)
+    # 2. DENEME: Yahoo Spot (Hafta sonu kesintisine karşı son 5 güne bakar)
     try:
-        # Piyasalar kapanmış olabilir diye son 5 günün verisini çekip, en son geçerli rakamı alıyoruz.
-        ons_data = yf.Ticker("XAUUSD=X").history(period="5d")
-        usd_data = yf.Ticker("TRY=X").history(period="5d")
-        
-        ons = ons_data['Close'].iloc[-1]
-        usd = usd_data['Close'].iloc[-1]
+        ons = yf.Ticker("XAUUSD=X").history(period="5d")['Close'].iloc[-1]
+        usd = yf.Ticker("TRY=X").history(period="5d")['Close'].iloc[-1]
         return float(ons), float(usd), "Uluslararası Spot (Yahoo)"
     except:
-        return None, None, "Bağlantı Hatası"
+        return None, None, "Bağlantı Koptu"
 
 ons, dolar, veri_kaynagi = gercek_piyasa_verisi_al()
+baglanti_var = True
 
-# Eğer her iki kaynak da çökerse sistemi uyar
+# EĞER İNTERNET VEYA BORSA ÇÖKERSE SİSTEMİ KAPATMA, "ÇEVRİMDIŞI MODA" GEÇ!
 if not ons or not dolar:
-    st.error("Piyasa verisi çekilemedi. (Lütfen GitHub'daki requirements.txt dosyanızda 'requests' yazdığından emin olun).")
-    st.stop()
-
-canli_teorik_has = (ons / 31.1034768) * dolar
+    baglanti_var = False
+    ons = 0.0
+    dolar = 0.0
+    veri_kaynagi = "🔴 Çevrimdışı Mod (Son Kayıt Gösteriliyor)"
+    st.warning("⚠️ Canlı borsa bağlantısı geçici olarak kurulamıyor. Tabela kapanmadı, sadece son girdiğiniz fiyatlarla sabitlendi.")
 
 # --- 4. KALICI HAFIZA KURULUMU ---
 DOSYA_ADI = "fiyat_hafizasi.json"
@@ -87,14 +83,14 @@ if os.path.exists(DOSYA_ADI):
         kalici_hafiza = varsayilan_veriler
 else:
     kalici_hafiza = varsayilan_veriler
+
 for anahtar, deger in kalici_hafiza.items():
     if anahtar not in st.session_state:
         st.session_state[anahtar] = deger
-
 # --- 5. BAŞLIK VE FİYAT GİRİŞ FORMU ---
 st.markdown("<h1 style='text-align: center; color: #00ff00; font-size: clamp(25px, 6vw, 55px); margin-bottom: 10px;'>🪙 İRYUM CANLI PANO 🪙</h1>", unsafe_allow_html=True)
 
-exp = st.expander("⚙️ FİYATLARI GİRMEK VE GÜNCELLEMEK İÇİN TIKLAYIN ⚙️", expanded=True)
+exp = st.expander("⚙️ FİYATLARI GİRMEK VE GÜNCELLEMEK İÇİN TIKLAYIN ⚙️", expanded=False)
 frm = exp.form(key="fiyat_formu")
 
 frm.markdown("### 1. Ürünlerin İlk Fiyatları")
@@ -135,6 +131,13 @@ frm.markdown("<br>", unsafe_allow_html=True)
 
 buton = frm.form_submit_button(label="✅ RAKAMLARI SİSTEME İŞLE VE GÜNCELLE")
 
+# --- 6. HESAPLAMA MANTIĞI ---
+if baglanti_var:
+    canli_teorik_has = (ons / 31.1034768) * dolar
+else:
+    # İnternet yoksa teorik hası eski kayıtlı has ile aynı yap (oran %0 olsun)
+    canli_teorik_has = st.session_state.kayitli_teorik_has
+
 if buton:
     st.session_state.kayitli_teorik_has = canli_teorik_has
     st.session_state.g_24 = y_24
@@ -153,7 +156,7 @@ if buton:
     st.session_state.g_gram_s = y_gram_s
 
     yeni_kayit_verisi = {
-        'kayitli_teorik_has': canli_teorik_has, 'g_24': y_24, 'g_22_s': y_22_s, 'g_14': y_14, 'g_22_a': y_22_a,
+        'kayitli_teorik_has': st.session_state.kayitli_teorik_has, 'g_24': y_24, 'g_22_s': y_22_s, 'g_14': y_14, 'g_22_a': y_22_a,
         'g_besli_a': y_besli_a, 'g_besli_s': y_besli_s, 'g_tam_a': y_tam_a, 'g_tam_s': y_tam_s,
         'g_yarim_a': y_yarim_a, 'g_yarim_s': y_yarim_s, 'g_ceyrek_a': y_ceyrek_a, 'g_ceyrek_s': y_ceyrek_s,
         'g_gram_a': y_gram_a, 'g_gram_s': y_gram_s
@@ -164,8 +167,9 @@ if buton:
     except:
         pass
 
-# --- 6. HESAPLAMA VE TABLO BASIMI ---
+# Oran Hesaplama (Bağlantı kopsa bile oran 1.0 kalacağı için rakamlar değişmez)
 oran = canli_teorik_has / st.session_state.kayitli_teorik_has if st.session_state.kayitli_teorik_has > 0 else 1.0
+# --- 7. TABLO BASIMI ---
 c1_h, c2_h, c3_h = st.columns([1.2, 1, 1])
 c2_h.markdown('<div class="header-container"><div class="header-text">ALIŞ</div></div>', unsafe_allow_html=True)
 c3_h.markdown('<div class="header-container"><div class="header-text">SATIŞ</div></div>', unsafe_allow_html=True)
@@ -194,5 +198,4 @@ satir_bas("ÇEYREK", st.session_state.g_ceyrek_a, st.session_state.g_ceyrek_s)
 satir_bas("GRAM (HAS)", st.session_state.g_gram_a, st.session_state.g_gram_s)
 
 saat = datetime.now(pytz.timezone('Europe/Istanbul')).strftime('%H:%M:%S')
-
 st.markdown(f"<div style='text-align: center; color: #555; margin-top: 25px;'>ONS: {ons:,.2f} $ | USD: {dolar:,.4f} ₺ | Saat: {saat} | Kaynak: {veri_kaynagi}</div>", unsafe_allow_html=True)
