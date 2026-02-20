@@ -34,46 +34,50 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. HAFIZA (HATALARA KARŞI ZIRHLANDI) ---
+# --- 3. HAFIZA ---
 DOSYA_ADI = "fiyat_hafizasi.json"
 varsayilan = {'son_ons': 0.0, 'son_usd': 0.0, 'kayitli_teorik_has': 0.0, 'g_24': 0.0, 'g_22_s': 0.0, 'g_14': 0.0, 'g_22_a': 0.0, 'g_besli_a': 0.0, 'g_besli_s': 0.0, 'g_tam_a': 0.0, 'g_tam_s': 0.0, 'g_yarim_a': 0.0, 'g_yarim_s': 0.0, 'g_ceyrek_a': 0.0, 'g_ceyrek_s': 0.0, 'g_gram_a': 0.0, 'g_gram_s': 0.0}
 
-if "kurulum_tamam" not in st.session_state:
-    st.session_state.kurulum_tamam = True
-    kayitlar = {}
-    try:
-        dosya = open(DOSYA_ADI, "r")
-        kayitlar = json.load(dosya)
-        dosya.close()
-    except: pass
-    
-    # Eski dosyada olmayan yeni değişkenleri sıfır (0.0) olarak tamamlar, çökmez.
-    for k, v in varsayilan.items():
-        st.session_state[k] = kayitlar.get(k, v)
+try:
+    dosya = open(DOSYA_ADI, "r")
+    kalici_hafiza = json.load(dosya)
+    dosya.close()
+except:
+    kalici_hafiza = varsayilan
 
-# --- 4. HİBRİT VERİ ÇEKME MOTORU ---
+st.session_state.update({k: v for k, v in kalici_hafiza.items() if k not in st.session_state})
+
+# --- 4. HİBRİT VE HAFTA SONU KORUMALI VERİ ÇEKME MOTORU ---
 ons, dolar, kaynak = 0.0, 0.0, ""
 headers = {"User-Agent": "Mozilla/5.0"}
 
-# 1. ONS: Sırf CanlıDöviz gibi SPOT çekmek için XAUUSD kullanıyoruz.
-try: ons = float(yf.Ticker("XAUUSD=X").history(period="1d", interval="1m")['Close'].iloc[-1])
-except: pass
-
-# 2. DOLAR: Kapalıçarşı Fiziki Satış (Nadir uyumlu)
 try:
     r = requests.get("https://finans.truncgil.com/today.json", headers=headers, timeout=5)
-    dolar = float(r.json()['USD']['Satış'].replace('.', '').replace(',', '.'))
-    kaynak = "Spot ONS & Çarşı USD"
+    v = r.json()
+    ons = float(v['ONS']['Satış'].replace('.', '').replace(',', '.'))
+    dolar = float(v['USD']['Satış'].replace('.', '').replace(',', '.'))
+    kaynak = "Kapalıçarşı (Truncgil)"
 except:
+    pass
+
+if ons == 0.0:
     try:
         r = requests.get("https://api.genelpara.com/embed/para.json", headers=headers, timeout=5)
-        dolar = float(r.json()['USD']['satis'])
-        kaynak = "Spot ONS & Çarşı USD"
+        v = r.json()
+        ons = float(v['ONS']['satis'])
+        dolar = float(v['USD']['satis'])
+        kaynak = "GenelPara"
     except:
-        try:
-            dolar = float(yf.Ticker("TRY=X").history(period="1d", interval="1m")['Close'].iloc[-1])
-            kaynak = "Spot ONS & Spot USD"
-        except: pass
+        pass
+
+if ons == 0.0:
+    try:
+        # HAFTA SONU KORUMASI: Son 1 dakika yerine son 5 güne bakıp en son kapanışı alır!
+        ons = float(yf.Ticker("XAUUSD=X").history(period="5d")['Close'].iloc[-1])
+        dolar = float(yf.Ticker("TRY=X").history(period="5d")['Close'].iloc[-1])
+        kaynak = "Uluslararası Spot"
+    except:
+        pass
 
 if ons == 0.0 or dolar == 0.0:
     ons = st.session_state.son_ons
@@ -81,7 +85,7 @@ if ons == 0.0 or dolar == 0.0:
     kaynak = "Çevrimdışı (Son Kayıt)"
 
 if ons == 0.0 or dolar == 0.0:
-    st.error("Bağlantı yok. İnterneti kontrol edin.")
+    st.error("Bağlantı yok. Borsa kapalı ve hafızada kayıt bulunamadı.")
     st.stop()
 
 st.session_state.update({'son_ons': ons, 'son_usd': dolar})
@@ -128,7 +132,7 @@ y_gram_s = cg2.number_input("Satış (Gram)", value=float(st.session_state.g_gra
 frm.markdown("<br>", unsafe_allow_html=True)
 buton = frm.form_submit_button(label="✅ RAKAMLARI SİSTEME İŞLE VE GÜNCELLE")
 
-# --- 6. KAYIT İŞLEMİ (DÜZLEŞTİRİLDİ, HATA VERMEZ) ---
+# --- 6. KAYIT İŞLEMİ ---
 if buton:
     veri_paketi = {'kayitli_teorik_has': canli_teorik_has, 'g_24': y_24, 'g_22_s': y_22_s, 'g_14': y_14, 'g_22_a': y_22_a, 'g_besli_a': y_besli_a, 'g_besli_s': y_besli_s, 'g_tam_a': y_tam_a, 'g_tam_s': y_tam_s, 'g_yarim_a': y_yarim_a, 'g_yarim_s': y_yarim_s, 'g_ceyrek_a': y_ceyrek_a, 'g_ceyrek_s': y_ceyrek_s, 'g_gram_a': y_gram_a, 'g_gram_s': y_gram_s, 'son_ons': ons, 'son_usd': dolar}
     st.session_state.update(veri_paketi)
@@ -138,7 +142,7 @@ if buton:
         dosya.close()
     except: pass
 
-# --- 7. TABLO BASIMI (DÜZLEŞTİRİLDİ, HATA VERMEZ) ---
+# --- 7. TABLO BASIMI ---
 oran = canli_teorik_has / st.session_state.kayitli_teorik_has if st.session_state.kayitli_teorik_has > 0 else 1.0
 
 ch1, ch2, ch3 = st.columns([1.2, 1, 1])
