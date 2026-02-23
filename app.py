@@ -1,13 +1,12 @@
 import streamlit as st
-import yfinance as yf  # fallback only
+import requests
 from datetime import datetime
 import pytz
 from streamlit_autorefresh import st_autorefresh
 import json
 import os
-import time
+from typing import Any, Dict, Optional
 
-import socketio
 # --- 1. SAYFA AYARLARI ---
 st.set_page_config(page_title="İryum Canlı Pano", layout="wide")
 st_autorefresh(interval=120000, key="fiyat_sayaci")
@@ -36,104 +35,93 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. VERİ ÇEKME MOTORU (Harem Altın) ---
-# Bu pano, Harem ekranıyla aynı kalması için ONS / USD / HAS değerlerini Harem'in canlı yayınından alır.
-# Not: Yayın formatı zamanla değişebilir; bu yüzden payload esnek şekilde parse ediliyor.
+# --- 3. VERİ ÇEKME MOTORU (HAREM ALTIN) ---
+# Streamlit Cloud'da websocket/socket.io bağlantıları sık sık bloklanabildiği için,
+# Harem'in web panelinin kullandığı AJAX endpoint'lerini HTTP POST ile çekiyoruz.
+# (X-Requested-With header'ı önemli.)
 
-def _to_float_tr(v):
+def _to_float(v: Any) -> Optional[float]:
+    if v is None:
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    if not s or s == "-":
+        return None
+    # 7.431,05 gibi TR formatlarını da temizle
+    s = s.replace(".", "").replace(",", ".")
     try:
-        if v is None:
-            return None
-        if isinstance(v, (int, float)):
-            return float(v)
-        s = str(v).strip()
-        # 7.520,66 -> 7520.66 ; 170.900 -> 170900
-        s = s.replace(".", "").replace(",", ".")
         return float(s)
-    except Exception:
+    except:
         return None
 
-def _walk(obj):
-    if isinstance(obj, dict):
-        yield obj
-        for vv in obj.values():
-            yield from _walk(vv)
-    elif isinstance(obj, list):
-        for it in obj:
-            yield from _walk(it)
 
-def _extract_code_buy_sell(d):
-    # Harem payload'larında farklı alan adları gelebiliyor; olası anahtarları dene
-    if not isinstance(d, dict):
+@st.cache_data(ttl=110, show_spinner=False)
+def harem_anlik_fiyatlar() -> Dict[str, Optional[float]]:
+    session = requests.Session()
+    headers = {
+        "X-Requested-With": "XMLHttpRequest",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "User-Agent": "Mozilla/5.0",
+        "Referer": "https://www.haremaltin.com/",
+    }
+    payload = "dil_kodu=tr"
+
+    def post_json(url: str) -> Dict[str, Any]:
+        r = session.post(url, data=payload, headers=headers, timeout=15)
+        r.raise_for_status()
+        return r.json()
+
+    # Not: Harem tarafında altınlar ve dövizler ayrı endpoint'lerden gelebiliyor.
+    altin = post_json("https://www.haremaltin.com/dashboard/ajax/altin")
+    doviz = post_json("https://www.haremaltin.com/dashboard/ajax/doviz")
+
+    altin_data = altin.get("data", altin)
+    doviz_data = doviz.get("data", doviz)
+
+    # Harem ekranındaki ana kalemler için olası kodlar:
+    # - HAS ALTIN: ALTIN (bazı yerlerde HAS)
+    # - ONS: ONS
+    # - USD: USDTRY
+    # - USD/KG: USDKG
+    def pick_satis(d: Dict[str, Any], *keys: str) -> Optional[float]:
+        for k in keys:
+            if k in d and isinstance(d[k], dict):
+                if "satis" in d[k]:
+                    val = _to_float(d[k].get("satis"))
+                    if val is not None:
+                        return val
+            # bazı implementasyonlarda direkt string/float olabilir
+            if k in d and not isinstance(d[k], dict):
+                val = _to_float(d.get(k))
+                if val is not None:
+                    return val
         return None
-    code = d.get("code") or d.get("symbol") or d.get("s") or d.get("k") or d.get("KOD")
-    if isinstance(code, str):
-        code_u = code.strip().upper()
-    else:
-        return None
 
-    buy = d.get("alis") or d.get("buy") or d.get("bid") or d.get("b") or d.get("ALIS")
-    sell = d.get("satis") or d.get("sell") or d.get("ask") or d.get("a") or d.get("SATIS")
+    has_satis = pick_satis(altin_data, "ALTIN", "HAS", "HASALTIN")
+    ons_satis = pick_satis(altin_data, "ONS")
+    usdkg_satis = pick_satis(altin_data, "USDKG", "USD/KG", "USD_KG")
+    usdtry_satis = pick_satis(doviz_data, "USDTRY", "USD")
 
-    buy_f = _to_float_tr(buy)
-    sell_f = _to_float_tr(sell)
+    return {
+        "has_satis": has_satis,
+        "ons_satis": ons_satis,
+        "usdtry_satis": usdtry_satis,
+        "usdkg_satis": usdkg_satis,
+    }
 
-    if buy_f is None and sell_f is None:
-        return None
-    return code_u, buy_f, sell_f
 
-@st.cache_data(ttl=30)  # 2 dakikada bir yenilemede fazlasıyla yeterli; gereksiz bağlantıyı azaltır
-def harem_anlik_fiyatlar(timeout_sec: float = 4.0):
-    wanted = {"HAS", "ONS", "USD", "USDTRY", "DOLAR"}
-    captured = {}
-
-    sio = socketio.Client(reconnection=False, logger=False, engineio_logger=False)
-
-    def on_any(event, data=None):
-        payload = data
-        for node in _walk(payload):
-            parsed = _extract_code_buy_sell(node)
-            if not parsed:
-                continue
-            code, buy_f, sell_f = parsed
-            if code in wanted:
-                captured[code] = {"buy": buy_f, "sell": sell_f, "event": event}
-
-    # python-socketio: '*' catch-all handler
-    sio.on("*", on_any)
-
-    sio.connect("https://socketweb.haremaltin.com", transports=["polling", "websocket"])
-
-    t0 = time.time()
-    def _has_ons():
-        return "ONS" in captured and (captured["ONS"].get("sell") is not None)
-    def _has_usd():
-        for k in ("USDTRY", "USD", "DOLAR"):
-            if k in captured and captured[k].get("sell") is not None:
-                return True
-        return False
-    def _has_has():
-        return "HAS" in captured and (captured["HAS"].get("sell") is not None)
-
-    while time.time() - t0 < timeout_sec and not (_has_ons() and _has_usd() and _has_has()):
-        sio.sleep(0.1)
-
-    try:
-        sio.disconnect()
-    except Exception:
-        pass
-
-    return captured
-
-# Harem'den çek
 f = harem_anlik_fiyatlar()
+ons = f.get("ons_satis")
+dolar = f.get("usdtry_satis")
+canli_teorik_has = f.get("has_satis")
+altinkg_usd = f.get("usdkg_satis")
 
-ons = (f.get("ONS") or {}).get("sell")
-dolar = (f.get("USDTRY") or f.get("USD") or f.get("DOLAR") or {}).get("sell")
-canli_teorik_has = (f.get("HAS") or {}).get("sell")
-
-if ons is None or dolar is None or canli_teorik_has is None:
-    st.error("Harem verisi çekilemedi (ONS / USD / HAS). İnternet bağlantısını kontrol edin veya biraz sonra tekrar deneyin.")
+if (ons is None) or (dolar is None) or (canli_teorik_has is None):
+    st.error(
+        "Harem Altın'dan fiyatlar çekilemedi. "
+        "(Endpoint değişmiş/engellenmiş olabilir.)"
+    )
     st.stop()
 
 # --- 4. KALICI HAFIZA (JSON) SİSTEMİ ---
@@ -265,4 +253,8 @@ satir_bas("ÇEYREK", st.session_state.g_ceyrek_a, st.session_state.g_ceyrek_s)
 satir_bas("GRAM (HAS)", st.session_state.g_gram_a, st.session_state.g_gram_s)
 
 saat = datetime.now(pytz.timezone('Europe/Istanbul')).strftime('%H:%M:%S')
-st.markdown(f"<div style='text-align: center; color: #555; margin-top: 25px;'>ONS: {ons:,.2f} $ | USD: {dolar:,.4f} ₺ | Saat: {saat}</div>", unsafe_allow_html=True)
+usdkg_txt = f" | ALTIN KG/USD: {altinkg_usd:,.2f} $" if altinkg_usd is not None else ""
+st.markdown(
+    f"<div style='text-align: center; color: #555; margin-top: 25px;'>ONS: {ons:,.2f} $ | USD: {dolar:,.4f} ₺{usdkg_txt} | Saat: {saat}</div>",
+    unsafe_allow_html=True,
+)
