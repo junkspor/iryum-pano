@@ -35,10 +35,12 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. VERİ ÇEKME MOTORU (HAREM ALTIN) ---
-# Streamlit Cloud'da websocket/socket.io bağlantıları sık sık bloklanabildiği için,
-# Harem'in web panelinin kullandığı AJAX endpoint'lerini HTTP POST ile çekiyoruz.
-# (X-Requested-With header'ı önemli.)
+# --- 3. VERİ ÇEKME MOTORU (HAREM ALTIN ÖNCELİKLİ) ---
+# Amaç: Uygulama çökmesin. Önce Harem'den (HAS/ONS/USD/USDKG "satış") dene,
+# engellenirse en son başarılı değeri kullan; o da yoksa yfinance fallback.
+#
+# Streamlit Cloud / datacenter IP'leri bazen Harem tarafında WAF'a takılıyor (403/429 vb).
+# Bu yüzden HTTP hatasını raise etmiyoruz; sessizce fallback'e geçiyoruz.
 
 def _to_float(v: Any) -> Optional[float]:
     if v is None:
@@ -56,52 +58,100 @@ def _to_float(v: Any) -> Optional[float]:
         return None
 
 
-@st.cache_data(ttl=110, show_spinner=False)
-def harem_anlik_fiyatlar() -> Dict[str, Optional[float]]:
-    session = requests.Session()
-    headers = {
-        "X-Requested-With": "XMLHttpRequest",
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "User-Agent": "Mozilla/5.0",
-        "Referer": "https://www.haremaltin.com/",
-    }
-    payload = "dil_kodu=tr"
+def _norm_code(x: Any) -> str:
+    return str(x or "").strip().upper().replace(" ", "").replace("/", "")
 
-    def post_json(url: str) -> Dict[str, Any]:
-        r = session.post(url, data=payload, headers=headers, timeout=15)
-        r.raise_for_status()
-        return r.json()
 
-    # Not: Harem tarafında altınlar ve dövizler ayrı endpoint'lerden gelebiliyor.
-    altin = post_json("https://www.haremaltin.com/dashboard/ajax/altin")
-    doviz = post_json("https://www.haremaltin.com/dashboard/ajax/doviz")
+def _extract_satis_from_payload(payload: Any, code_candidates: list[str]) -> Optional[float]:
+    """payload dict veya list olabilir. İçindeki elemanlardan kodu eşleyip 'satis' döndürür."""
+    candidates = {_norm_code(c) for c in code_candidates}
 
-    altin_data = altin.get("data", altin)
-    doviz_data = doviz.get("data", doviz)
-
-    # Harem ekranındaki ana kalemler için olası kodlar:
-    # - HAS ALTIN: ALTIN (bazı yerlerde HAS)
-    # - ONS: ONS
-    # - USD: USDTRY
-    # - USD/KG: USDKG
-    def pick_satis(d: Dict[str, Any], *keys: str) -> Optional[float]:
-        for k in keys:
-            if k in d and isinstance(d[k], dict):
-                if "satis" in d[k]:
-                    val = _to_float(d[k].get("satis"))
-                    if val is not None:
-                        return val
-            # bazı implementasyonlarda direkt string/float olabilir
-            if k in d and not isinstance(d[k], dict):
-                val = _to_float(d.get(k))
+    def scan(obj: Any) -> Optional[float]:
+        if isinstance(obj, dict):
+            # 1) direkt dict içinde "satis" varsa (bazı endpointler böyle)
+            if "satis" in obj and ("kod" in obj or "code" in obj or "symbol" in obj or "k" in obj):
+                code = _norm_code(obj.get("kod") or obj.get("code") or obj.get("symbol") or obj.get("k"))
+                if code in candidates:
+                    return _to_float(obj.get("satis"))
+            # 2) iç içe dict yapısı: {"ALTIN": {"satis": ...}} gibi
+            for k, v in obj.items():
+                if isinstance(v, dict) and "satis" in v:
+                    if _norm_code(k) in candidates:
+                        val = _to_float(v.get("satis"))
+                        if val is not None:
+                            return val
+            # 3) daha derine in
+            for v in obj.values():
+                val = scan(v)
+                if val is not None:
+                    return val
+        elif isinstance(obj, list):
+            for it in obj:
+                val = scan(it)
                 if val is not None:
                     return val
         return None
 
-    has_satis = pick_satis(altin_data, "ALTIN", "HAS", "HASALTIN")
-    ons_satis = pick_satis(altin_data, "ONS")
-    usdkg_satis = pick_satis(altin_data, "USDKG", "USD/KG", "USD_KG")
-    usdtry_satis = pick_satis(doviz_data, "USDTRY", "USD")
+    return scan(payload)
+
+
+@st.cache_data(ttl=110, show_spinner=False)
+def harem_anlik_fiyatlar() -> Dict[str, Optional[float]]:
+    session = requests.Session()
+    base_headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
+        ),
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.7,en;q=0.6",
+        "X-Requested-With": "XMLHttpRequest",
+        "Origin": "https://www.haremaltin.com",
+        "Referer": "https://www.haremaltin.com/",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "Connection": "keep-alive",
+    }
+    payload = "dil_kodu=tr"
+
+    # Bazı korumalar cookie isteyebiliyor: önce ana sayfayı bir kere al
+    try:
+        session.get("https://www.haremaltin.com/", headers=base_headers, timeout=10)
+    except:
+        pass
+
+    def post_json(url: str) -> Optional[Dict[str, Any]]:
+        # 2 deneme (kısa)
+        for _ in range(2):
+            try:
+                r = session.post(url, data=payload, headers=base_headers, timeout=15)
+                if r.status_code != 200:
+                    return None
+                # JSON olmayabilir; yine de dene
+                return r.json()
+            except:
+                continue
+        return None
+
+    altin = post_json("https://www.haremaltin.com/dashboard/ajax/altin")
+    doviz = post_json("https://www.haremaltin.com/dashboard/ajax/doviz")
+
+    altin_data = None
+    doviz_data = None
+    if isinstance(altin, dict):
+        altin_data = altin.get("data", altin.get("result", altin))
+    else:
+        altin_data = altin
+
+    if isinstance(doviz, dict):
+        doviz_data = doviz.get("data", doviz.get("result", doviz))
+    else:
+        doviz_data = doviz
+
+    # Kod adayları: grafikte USDKG geçiyor; ekranda "USD / KG" de var.
+    has_satis = _extract_satis_from_payload(altin_data, ["HASALTIN", "HAS", "ALTIN"])
+    ons_satis = _extract_satis_from_payload(altin_data, ["ONS"])
+    usdkg_satis = _extract_satis_from_payload(altin_data, ["USDKG", "USDKG", "USDKG", "USDKG", "USDKG", "USDKG", "USDKG", "USDKG", "USDKG", "USDKG", "USD/KG", "USDKG"])
+    usdtry_satis = _extract_satis_from_payload(doviz_data, ["USDTRY", "USD"])
 
     return {
         "has_satis": has_satis,
@@ -111,18 +161,83 @@ def harem_anlik_fiyatlar() -> Dict[str, Optional[float]]:
     }
 
 
+def _yfinance_fallback() -> Dict[str, Optional[float]]:
+    try:
+        import yfinance as yf  # opsiyonel fallback
+    except Exception:
+        return {"ons": None, "usd": None}
+
+    def veri_getir(sembol: str) -> Optional[float]:
+        try:
+            h = yf.Ticker(sembol).history(period="1d", interval="1m")
+            if h is None or h.empty:
+                return None
+            return float(h["Close"].iloc[-1])
+        except:
+            return None
+
+    ons = veri_getir("GC=F")       # ons altın
+    usd = veri_getir("TRY=X")      # usdtry
+    return {"ons": ons, "usd": usd}
+
+
+def _read_last_good_from_file() -> Dict[str, Optional[float]]:
+    # mevcut dosya adın
+    fn = "fiyat_hafizasi.json"
+    if not os.path.exists(fn):
+        return {"ons": None, "usd": None, "has": None, "usdkg": None}
+    try:
+        with open(fn, "r") as f:
+            d = json.load(f)
+        return {
+            "ons": _to_float(d.get("last_ons")),
+            "usd": _to_float(d.get("last_usd")),
+            "has": _to_float(d.get("last_has")),
+            "usdkg": _to_float(d.get("last_usdkg")),
+        }
+    except:
+        return {"ons": None, "usd": None, "has": None, "usdkg": None}
+
+
+# 1) Harem dene
 f = harem_anlik_fiyatlar()
 ons = f.get("ons_satis")
 dolar = f.get("usdtry_satis")
 canli_teorik_has = f.get("has_satis")
 altinkg_usd = f.get("usdkg_satis")
 
+# 2) Harem gelmediyse: dosyadaki son iyi değeri kullan
 if (ons is None) or (dolar is None) or (canli_teorik_has is None):
-    st.error(
-        "Harem Altın'dan fiyatlar çekilemedi. "
-        "(Endpoint değişmiş/engellenmiş olabilir.)"
-    )
-    st.stop()
+    last = _read_last_good_from_file()
+    ons = ons or last["ons"]
+    dolar = dolar or last["usd"]
+    canli_teorik_has = canli_teorik_has or last["has"]
+    altinkg_usd = altinkg_usd or last["usdkg"]
+
+# 3) Hâlâ yoksa: yfinance fallback (app çökmesin)
+if (ons is None) or (dolar is None) or (canli_teorik_has is None):
+    fb = _yfinance_fallback()
+    if ons is None:
+        ons = fb.get("ons")
+    if dolar is None:
+        dolar = fb.get("usd")
+    # teorik has (fallbackte) formülle
+    if (ons is not None) and (dolar is not None) and (canli_teorik_has is None):
+        canli_teorik_has = (ons / 31.1034768) * dolar
+
+# Son kontrol: yine de hiç veri yoksa, bu sefer kullanıcıya düzgün mesaj ver ama sayfayı patlatma
+if (ons is None) or (dolar is None) or (canli_teorik_has is None):
+    st.warning("Harem Altın verisi şu an engellendi. Son bilinen değer de yok. Lütfen daha sonra tekrar deneyin.")
+    ons = ons or 0.0
+    dolar = dolar or 0.0
+    canli_teorik_has = canli_teorik_has or 0.0
+    altinkg_usd = altinkg_usd or 0.0
+
+# Başarılıysa: son iyi değerleri session_state'e koy (dosyaya yazmayı aşağıda yapacağız)
+st.session_state["last_ons"] = ons
+st.session_state["last_usd"] = dolar
+st.session_state["last_has"] = canli_teorik_has
+st.session_state["last_usdkg"] = altinkg_usd
 
 # --- 4. KALICI HAFIZA (JSON) SİSTEMİ ---
 DOSYA_ADI = "fiyat_hafizasi.json"
@@ -131,7 +246,8 @@ varsayilan_veriler = {
     'kayitli_teorik_has': 0.0, 'g_24': 0.0, 'g_22_s': 0.0, 'g_14': 0.0, 'g_22_a': 0.0,
     'g_besli_a': 0.0, 'g_besli_s': 0.0, 'g_tam_a': 0.0, 'g_tam_s': 0.0,
     'g_yarim_a': 0.0, 'g_yarim_s': 0.0, 'g_ceyrek_a': 0.0, 'g_ceyrek_s': 0.0,
-    'g_gram_a': 0.0, 'g_gram_s': 0.0
+    'g_gram_a': 0.0, 'g_gram_s': 0.0,
+    'last_ons': 0.0, 'last_usd': 0.0, 'last_has': 0.0, 'last_usdkg': 0.0
 }
 
 # Sayfa her açıldığında dosyadan son kaydedilen rakamları oku
@@ -214,7 +330,11 @@ if buton:
         'kayitli_teorik_has': canli_teorik_has, 'g_24': y_24, 'g_22_s': y_22_s, 'g_14': y_14, 'g_22_a': y_22_a,
         'g_besli_a': y_besli_a, 'g_besli_s': y_besli_s, 'g_tam_a': y_tam_a, 'g_tam_s': y_tam_s,
         'g_yarim_a': y_yarim_a, 'g_yarim_s': y_yarim_s, 'g_ceyrek_a': y_ceyrek_a, 'g_ceyrek_s': y_ceyrek_s,
-        'g_gram_a': y_gram_a, 'g_gram_s': y_gram_s
+        'g_gram_a': y_gram_a, 'g_gram_s': y_gram_s,
+        'last_ons': st.session_state.get('last_ons', 0.0),
+        'last_usd': st.session_state.get('last_usd', 0.0),
+        'last_has': st.session_state.get('last_has', 0.0),
+        'last_usdkg': st.session_state.get('last_usdkg', 0.0)
     }
     try:
         with open(DOSYA_ADI, "w") as dosya:

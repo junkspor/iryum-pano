@@ -1,6 +1,5 @@
 streamlit
-pytz
-streamlit-autorefresh
-python-socketio[client]
-websocket-client
 requests
+streamlit-autorefresh
+pytz
+yfinance
