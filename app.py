@@ -1,11 +1,13 @@
 import streamlit as st
-import yfinance as yf
+import yfinance as yf  # fallback only
 from datetime import datetime
 import pytz
 from streamlit_autorefresh import st_autorefresh
 import json
 import os
+import time
 
+import socketio
 # --- 1. SAYFA AYARLARI ---
 st.set_page_config(page_title="İryum Canlı Pano", layout="wide")
 st_autorefresh(interval=120000, key="fiyat_sayaci")
@@ -34,21 +36,105 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# --- 3. VERİ ÇEKME MOTORU ---
-def veri_getir(sembol):
+# --- 3. VERİ ÇEKME MOTORU (Harem Altın) ---
+# Bu pano, Harem ekranıyla aynı kalması için ONS / USD / HAS değerlerini Harem'in canlı yayınından alır.
+# Not: Yayın formatı zamanla değişebilir; bu yüzden payload esnek şekilde parse ediliyor.
+
+def _to_float_tr(v):
     try:
-        return yf.Ticker(sembol).history(period="1d", interval="1m")['Close'].iloc[-1]
-    except:
+        if v is None:
+            return None
+        if isinstance(v, (int, float)):
+            return float(v)
+        s = str(v).strip()
+        # 7.520,66 -> 7520.66 ; 170.900 -> 170900
+        s = s.replace(".", "").replace(",", ".")
+        return float(s)
+    except Exception:
         return None
 
-ons = veri_getir("GC=F")
-dolar = veri_getir("TRY=X")
+def _walk(obj):
+    if isinstance(obj, dict):
+        yield obj
+        for vv in obj.values():
+            yield from _walk(vv)
+    elif isinstance(obj, list):
+        for it in obj:
+            yield from _walk(it)
 
-if not ons or not dolar:
-    st.error("Borsa verisi çekilemedi. İnternet bağlantısını kontrol edin.")
+def _extract_code_buy_sell(d):
+    # Harem payload'larında farklı alan adları gelebiliyor; olası anahtarları dene
+    if not isinstance(d, dict):
+        return None
+    code = d.get("code") or d.get("symbol") or d.get("s") or d.get("k") or d.get("KOD")
+    if isinstance(code, str):
+        code_u = code.strip().upper()
+    else:
+        return None
+
+    buy = d.get("alis") or d.get("buy") or d.get("bid") or d.get("b") or d.get("ALIS")
+    sell = d.get("satis") or d.get("sell") or d.get("ask") or d.get("a") or d.get("SATIS")
+
+    buy_f = _to_float_tr(buy)
+    sell_f = _to_float_tr(sell)
+
+    if buy_f is None and sell_f is None:
+        return None
+    return code_u, buy_f, sell_f
+
+@st.cache_data(ttl=30)  # 2 dakikada bir yenilemede fazlasıyla yeterli; gereksiz bağlantıyı azaltır
+def harem_anlik_fiyatlar(timeout_sec: float = 4.0):
+    wanted = {"HAS", "ONS", "USD", "USDTRY", "DOLAR"}
+    captured = {}
+
+    sio = socketio.Client(reconnection=False, logger=False, engineio_logger=False)
+
+    def on_any(event, data=None):
+        payload = data
+        for node in _walk(payload):
+            parsed = _extract_code_buy_sell(node)
+            if not parsed:
+                continue
+            code, buy_f, sell_f = parsed
+            if code in wanted:
+                captured[code] = {"buy": buy_f, "sell": sell_f, "event": event}
+
+    # python-socketio: '*' catch-all handler
+    sio.on("*", on_any)
+
+    sio.connect("https://socketweb.haremaltin.com", transports=["polling", "websocket"])
+
+    t0 = time.time()
+    def _has_ons():
+        return "ONS" in captured and (captured["ONS"].get("sell") is not None)
+    def _has_usd():
+        for k in ("USDTRY", "USD", "DOLAR"):
+            if k in captured and captured[k].get("sell") is not None:
+                return True
+        return False
+    def _has_has():
+        return "HAS" in captured and (captured["HAS"].get("sell") is not None)
+
+    while time.time() - t0 < timeout_sec and not (_has_ons() and _has_usd() and _has_has()):
+        sio.sleep(0.1)
+
+    try:
+        sio.disconnect()
+    except Exception:
+        pass
+
+    return captured
+
+# Harem'den çek
+f = harem_anlik_fiyatlar()
+
+ons = (f.get("ONS") or {}).get("sell")
+dolar = (f.get("USDTRY") or f.get("USD") or f.get("DOLAR") or {}).get("sell")
+canli_teorik_has = (f.get("HAS") or {}).get("sell")
+
+if ons is None or dolar is None or canli_teorik_has is None:
+    st.error("Harem verisi çekilemedi (ONS / USD / HAS). İnternet bağlantısını kontrol edin veya biraz sonra tekrar deneyin.")
     st.stop()
-
-canli_teorik_has = (ons / 31.1034768) * dolar
 
 # --- 4. KALICI HAFIZA (JSON) SİSTEMİ ---
 DOSYA_ADI = "fiyat_hafizasi.json"
