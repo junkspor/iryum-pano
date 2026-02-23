@@ -1,5 +1,4 @@
 streamlit
 requests
-streamlit-autorefresh
 pytz
-yfinance
+streamlit-autorefresh
